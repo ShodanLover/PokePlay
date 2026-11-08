@@ -508,6 +508,23 @@ def test_hints_follow_her_progress():
     assert hint_for(8, True, []) == BY_BADGES[8] and hint_for(99, True, []) == BY_BADGES[8]
 
 
+def test_she_is_told_exactly_what_changed(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    mon = lambda hp, level: NS(nickname="Sprout", hp=hp, level=level)      # noqa: E731
+    before = NS(map_name="Town", money=100, party=[mon(20, 5)], items=[("Potion", 2)], balls=[])
+    after = NS(map_name="Route", money=150, party=[mon(14, 6), NS(nickname="Bud", hp=9, level=3)],
+               items=[("Potion", 1)], balls=[("Ball", 1)])
+    assert agent._note_changes(before) == []                # first look: nothing to compare with
+    assert agent._note_changes(before) == []                # nothing changed
+    changes = agent._note_changes(after)
+    for expected in ("You moved from Town to Route.", "Your money went from ₽100 to ₽150.",
+                     "Sprout went from level 5 to level 6.", "Sprout's HP went from 20 to 14.", "Bud joined your team.",
+                     "You used or lost Potion (now 1).", "You got Ball (now 1)."):
+        assert expected in changes
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

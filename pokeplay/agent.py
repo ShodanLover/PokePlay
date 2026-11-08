@@ -90,6 +90,8 @@ class Agent:
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
         self._hint_clock = -1
+        self._snapshot: dict | None = None          # what she last knew about, to spot what changed
+        self._changes: list[str] = []
         self._decisions_on_goal = 0                 # decisions since her goal changed or she found something new
         self._abandoned_goals: collections.deque[str] = collections.deque(maxlen=5)
         self._last_said = time.time()
@@ -574,6 +576,8 @@ class Agent:
             parts.append("WHAT PEOPLE HERE TOLD YOU:\n" + "\n".join(f'- "{p[:160]}"' for p in people_here[-5:]))
         if self.history:
             parts.append("RECENTLY (oldest first):\n" + "\n".join(f"- {h}" for h in self.history))
+        parts.append("WHAT JUST CHANGED (this is real, so react to it):\n" + "\n".join(f"- {c}" for c in self._changes)
+                     if self._changes else "WHAT JUST CHANGED: nothing since your last action.")
         self._hint_clock += 1
         if self._hint_clock % HINT_EVERY < HINT_LASTS:
             parts.append("A THOUGHT COMES TO YOU ABOUT WHAT TO DO NEXT (follow it if you can): "
@@ -652,6 +656,35 @@ class Agent:
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         self.memory.save()
 
+    def _note_changes(self, s: GameState) -> list[str]:
+        """Exactly what changed since her last look: she can't see the screen, so this is what she reacts to."""
+        now = {"place": s.map_name, "money": s.money, "team": {m.nickname: (m.hp, m.level) for m in s.party},
+               "items": dict(s.items + s.balls)}
+        old, self._snapshot = self._snapshot, now
+        if old is None:
+            return []
+        changes = []
+        if now["place"] != old["place"]:
+            changes.append(f"You moved from {old['place']} to {now['place']}.")
+        if now["money"] != old["money"]:
+            changes.append(f"Your money went from ₽{old['money']} to ₽{now['money']}.")
+        for name, (hp, level) in now["team"].items():
+            if name not in old["team"]:
+                changes.append(f"{name} joined your team.")
+                continue
+            old_hp, old_level = old["team"][name]
+            if level > old_level:
+                changes.append(f"{name} went from level {old_level} to level {level}.")
+            if hp != old_hp:
+                changes.append(f"{name}'s HP went from {old_hp} to {hp}.")
+        for item in set(now["items"]) | set(old["items"]):
+            before, after = old["items"].get(item, 0), now["items"].get(item, 0)
+            if after > before:
+                changes.append(f"You got {item} (now {after}).")
+            elif after < before:
+                changes.append(f"You used or lost {item} (now {after}).")
+        return changes
+
     def _prefer_untried(self, options: list) -> list:
         """No progress for a while? Then she can only pick from what she's tried least, so she works through it all."""
         if self._actions_since_discovery < STALE_AFTER:
@@ -691,6 +724,7 @@ class Agent:
         self._menu_picks.clear()
         self._leaving_menus = False
         s = self.game.state()
+        self._changes = self._note_changes(s)
         self.world.mark_visited(s)
         map_key = f"{s.map_group}.{s.map_num}"
         if self.memory.visit(map_key, s.map_name):
@@ -744,6 +778,8 @@ class Agent:
         result = self.world.execute(opt, s)
         self.memory.bump("steps", self.world.steps_taken - steps_before)
         self._record_outcome(opt.key, result.outcome)
+        if opt.kind == "exit" and result.outcome == "stuck":     # a proven fact, not a guess, so it's worth keeping
+            self.memory.add_lesson(f"{s.map_name}: you can't leave by the {opt.label.split(' side')[0].split()[-1]} side.")
         if opt.kind in ("warp", "exit") and result.outcome == "warped":
             if opt.key not in self.memory.links:
                 self._discovered()

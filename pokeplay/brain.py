@@ -38,7 +38,8 @@ GAME_SENSE = (
     "you where to go, go there. The game always works properly and nothing is a glitch: if something doesn't "
     "work, do something different instead of trying it again. Don't search empty corners for secrets. You can't "
     "restart or reset the game. Names are permanent: once a character or creature has been named, the name can't "
-    "be changed, so never try to change one or worry about it. "
+    "be changed, so never try to change one or worry about it. You can't see the screen, only the information "
+    "you're given, so talk about that. Never invent things you weren't told about, and if you don't know, say so. "
     "Don't keep saying that you know nothing: talk about what's in front of you. "
 )
 
