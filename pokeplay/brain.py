@@ -259,8 +259,12 @@ class Brain:
                "any name you like; it doesn't have to be the name you've used so far. " if kind == "player" else "")
             + 'Reply with JSON: {"name": "...", "say": "one or two sentences out loud about why you picked it"}'
         )
-        messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]
+        system = self._system()
+        if kind == "player":          # otherwise "You are <old name>" makes her just pick that again
+            system = system.replace(self.name, "a new streamer who hasn't picked a name yet")
+        rejected = ""
         for _ in range(3 if kind == "player" else 1):
+            messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt + rejected}]
             try:
                 data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
             except Exception as e:  # noqa: BLE001
@@ -269,6 +273,7 @@ class Brain:
             name = str(data.get("name", "")).strip()
             if kind == "player" and looks_pokemon_derived(name):
                 print(f"[brain] '{name}' sounds like it came from Pokémon; asking again")
+                rejected = f" You can't use '{name}'. Pick something completely different, with nothing from Pokémon in it."
                 continue
             return name, str(data.get("say", "")).strip()
         return "", ""

@@ -144,10 +144,13 @@ def test_owner_chosen_name_is_not_replaced(tmp_path):
 
 def test_character_name_is_not_pokemon_derived():
     from pokeplay.brain import Brain
-    b = Brain("http://x", "m")
+    b = Brain("http://x", "m", "Oldname")
     replies = iter(['{"name": "Pikachu", "say": "no"}', '{"name": "Flare", "say": "yes"}'])
-    b._chat = lambda *a, **k: next(replies)
+    sent = []
+    b._chat = lambda messages, **k: sent.append(messages) or next(replies)
     assert b.choose_name("player", 7) == ("Flare", "yes")
+    assert "Oldname" not in sent[0][0]["content"]       # her old name doesn't anchor the choice
+    assert "can't use 'Pikachu'" in sent[1][1]["content"]
 
 
 def test_leaked_instructions_are_not_spoken():
