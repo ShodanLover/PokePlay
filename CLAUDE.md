@@ -64,7 +64,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   Video → 1920x1080, 30 FPS. Advanced → **Automatically Reconnect** on.
 - The side panel shows her thoughts, her goal and Twitch chat (`twitch_channel` in `config.toml`; read-only in the
   page, it must never reach the AI). Her team is on the left of the subtitle bar. mGBA must stay at 5x, unmaximized:
-  OBS crops off its menu bar. A solid `Backdrop` color source sits behind everything.
+  OBS crops off its menu bar. A `Backdrop` image source (`pokeplay/overlay/background.png`, original
+  pixel art with no Nintendo characters or logos) sits behind everything.
 - Sources, top to bottom (top is drawn on top):
   1. **Avatar**: Browser, `http://127.0.0.1:8765/avatar`, 1920x1080
   2. **Subtitles**: Browser, `http://127.0.0.1:8765/subtitles`, 1920x1080
