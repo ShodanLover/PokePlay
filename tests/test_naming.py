@@ -235,6 +235,25 @@ def test_menu_circles_get_broken(tmp_path):
     assert agent.pressed == ["B", "B"] and len(agent.prompts) == 3
 
 
+def test_party_menu_circles_get_broken(tmp_path):
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    menu = Menu("party_action", "What to do with Pikachu?", ["SUMMARY", "SWITCH"])
+    for _ in range(3):
+        agent._menu_turn(menu)
+    assert agent.pressed == ["B"] and agent._leaving_menus
+
+
+def test_wandering_through_many_menus_gets_broken(tmp_path):
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    for i in range(12):
+        agent._menu_turn(Menu("list", f"Screen {i}", ["Something"]))
+    assert agent.pressed == ["B"] and agent._leaving_menus      # never the same choice twice, still lost
+
+
 def test_questions_the_game_asks_are_never_cut_off(tmp_path):
     from pokeplay.menus import Menu
 

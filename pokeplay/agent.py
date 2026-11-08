@@ -28,7 +28,8 @@ BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported
 MAX_TALK_OPTIONS = 5
 REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
-BROWSING_MENUS = {"start", "bag", "tm", "list"}   # menus she opened herself, as opposed to questions the game asks
+GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
+MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
 REPEAT_LIMIT = 3            # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
 LONG_SILENCE = 20          # seconds without a spoken line before the repeat check relaxes
@@ -202,7 +203,10 @@ class Agent:
             self.pilot.step()
             self._absorb_battle_lessons()
         elif mode == "party_menu":
-            self.pilot.party_menu()      # fallback if the party screen isn't readable yet
+            if self._leaving_menus and not self._in_battle:
+                self.emu.press("B", hold=2, wait=20)
+            else:
+                self.pilot.party_menu()  # fallback if the party screen isn't readable yet
         elif mode == "dialog":
             self._dialog()
         elif mode == "overworld":
@@ -405,7 +409,7 @@ class Agent:
     # ------------------------------------------------------------------ menus (hers)
     def _menu_turn(self, menu: Menu) -> None:
         self._in_menus = True
-        browsing = menu.kind in BROWSING_MENUS and not self._in_battle
+        browsing = menu.kind not in GAME_QUESTIONS and not self._in_battle
         if browsing and self._leaving_menus:
             self.emu.press("B", hold=2, wait=20)
             return
@@ -433,7 +437,8 @@ class Agent:
         self._apply_decision(d, f"{menu.title[:60]} -> {label}")
         if browsing:
             self._menu_picks[(menu.title[:60], label)] += 1
-            if self._menu_picks[(menu.title[:60], label)] >= MENU_LOOP_LIMIT:
+            if (self._menu_picks[(menu.title[:60], label)] >= MENU_LOOP_LIMIT
+                    or sum(self._menu_picks.values()) >= MENU_STREAK_LIMIT):
                 print("[agent] going round in circles in the menus; closing them")
                 self.history.append("You kept going round in circles in the menus, so you closed them.")
                 self._leaving_menus = True
