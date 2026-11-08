@@ -38,7 +38,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   spoken. Style rules are in `brain.py` (`DEFAULT_STYLE`), and the `speaking_style` config overrides them.
 - **Guided opening (owner changed this on 2026-11-08):** she was too lost to be watchable, so `hints.py` tells her the
   next story step on every map decision until she has 2 badges (parcel, Brock, Mt. Moon, Misty), then for 4 of every
-  15 decisions. Otherwise the first-timer rule below still holds.
+  15 decisions. Until Brock, `ROUTE` in `hints.py` also picks the exit or door for her on the map, and doors show their
+  real names, because she couldn't find the Mart. She still does battles and talking. Otherwise the first-timer rule
+  below still holds.
 - **Unattended play:** general rules keep her moving: impossible actions disappear, repeated ones rest, after 6
   decisions without anything new she can only pick what she's tried least (`_prefer_untried`), and a goal with no
   progress for 15 decisions is dropped along with the notes feeding it.

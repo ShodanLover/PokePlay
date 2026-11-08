@@ -19,7 +19,7 @@ from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
 from .menus import Menu, MenuReader
 from .naming import MAX_CHARS, NamingScreen, clean_name
-from .hints import hint_for
+from .hints import hint_for, target_for
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
@@ -601,13 +601,8 @@ class Agent:
             parts.append("YOUR TEAM IS BADLY HURT: go to the nearest Pokémon Center and talk to the person at the "
                          "counter, or go home and talk to Mom, before doing anything else.")
         self._hint_clock += 1
-        carrying_parcel = any("PARCEL" in item.upper() for item in s.key_items)
-        if carrying_parcel:
-            self.memory.stats["carried_parcel"] = 1
         if s.badges < GUIDED_UNTIL_BADGES or self._hint_clock % HINT_EVERY < HINT_LASTS:
-            delivered = bool(self.memory.stats.get("carried_parcel")) and not carrying_parcel
-            parts.append("YOUR NEXT STEP (do this): "
-                         + hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered))
+            parts.append("YOUR NEXT STEP (do this): " + self._next_step(s))
         if self._actions_since_discovery >= 8:
             parts.append(f"You've done {self._actions_since_discovery} things in a row without discovering "
                          "anything new.")
@@ -716,6 +711,23 @@ class Agent:
                 changes.append(f"You used or lost {item} (now {after}).")
         return changes
 
+    def _next_step(self, s: GameState) -> str:
+        carrying_parcel = any("PARCEL" in item.upper() for item in s.key_items)
+        if carrying_parcel:
+            self.memory.stats["carried_parcel"] = 1
+        delivered = bool(self.memory.stats.get("carried_parcel")) and not carrying_parcel
+        return hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered)
+
+    def _follow_route(self, options: list, s: GameState) -> list:
+        """In the guided opening, the exit or door for her next step is the one she takes. [] if there isn't one."""
+        if s.badges >= GUIDED_UNTIL_BADGES:
+            return []
+        want = target_for(self._next_step(s), s.map_name)
+        if not want:
+            return []
+        return [o for o in options if (o.kind == "exit" and o.label.startswith(f"Leave this area by the {want} side"))
+                or (o.kind == "warp" and want in o.dest)]
+
     def _no_turning_back(self, options: list) -> list:
         """Just arrived somewhere? She has to give it a go before heading straight back the way she came."""
         if self._decisions_here >= NO_TURNING_BACK or not self._came_from:
@@ -776,6 +788,7 @@ class Agent:
         self.overlay.update(location=s.map_name, badges=s.badges, money=s.money)
         self._maybe_reflect(s)
 
+        self.world.show_destinations = s.badges < GUIDED_UNTIL_BADGES
         options, _grid = self.world.build_options(s)
         if not options:
             self.history.append("Couldn't find anywhere to go, wiggling around.")
@@ -790,7 +803,8 @@ class Agent:
             self._menu_cooldown -= 1
         if hide_menu:
             options = [o for o in options if o.kind != "menu"] or options
-        options = self._prefer_untried(self._no_turning_back(self._drop_worn_out(options)))
+        options = self._drop_worn_out(options)
+        options = self._follow_route(options, s) or self._prefer_untried(self._no_turning_back(options))
 
         lines = []
         for o in options:

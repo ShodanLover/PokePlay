@@ -10,6 +10,7 @@ from . import addresses as A
 from .emulator import Emulator
 from .game import (ARROW_WARPS, BEHAVIOR_COUNTER, BEHAVIOR_TALL_GRASS, WATER_BEHAVIORS, Game,
                    GameState, MapGrid, NPC)
+from .maps import map_name
 from .memory import Memory
 from .pathfinding import STEPS, find_path, reachable, walkable
 
@@ -44,6 +45,7 @@ class Option:
     direction: str = ""
     npc: NPC | None = None
     distance: int = 0
+    dest: str = ""            # for doors: the real name of where it goes
 
 
 @dataclass
@@ -58,6 +60,7 @@ class Overworld:
     game: Game
     memory: Memory | None = None
     steps_taken: int = 0
+    show_destinations: bool = False     # name every door, even ones she hasn't been through (guided opening)
     temp_blocks: dict[tuple[int, int, int, int], float] = field(default_factory=dict)
     visited: dict[tuple[int, int], set[tuple[int, int]]] = field(default_factory=dict)
 
@@ -108,9 +111,12 @@ class Overworld:
             seen_dest.add(dest)
             key = f"{s.map_group}.{s.map_num}|door@{w.x},{w.y}"
             known = self.memory.links.get(key) if self.memory else None
+            dest_name = map_name(w.dest_group, w.dest_num)
+            if self.show_destinations:
+                known = dest_name
             where = f"leads to {known}" if known else "you haven't been through it yet"
             options.append(Option("warp", f"Go through the doorway/stairs {relative(s.x, s.y, w.x, w.y)} ({where})",
-                                  key, (w.x, w.y), distance=len(path)))
+                                  key, (w.x, w.y), distance=len(path), dest=dest_name))
 
         # Walking off the edge of the map into a connected area.
         for c in self.game.connections():

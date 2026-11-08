@@ -613,6 +613,32 @@ def test_hp_numbers_stay_out_of_her_journal(tmp_path):
     assert not agent._worth_noting("Sprout's HP is really low.")
 
 
+def test_route_targets_for_the_opening():
+    from pokeplay import hints as h
+
+    assert h.target_for(h.GET_PARCEL, "Viridian City") == "Viridian City - Mart"
+    assert h.target_for(h.GET_PARCEL, "Viridian City - House") == "Viridian City"      # wrong building: back out
+    assert h.target_for(h.GET_PARCEL, "Viridian City - Mart") == ""                    # arrived
+    assert h.target_for(h.PARCEL, "Pallet Town") == "Professor Oak's Lab"
+    assert h.target_for(h.TO_VIRIDIAN, "Pallet Town - Player's House - 2F") == "Pallet Town"
+    assert h.target_for(h.MISTY, "Cerulean City") == ""                                # no set route here
+
+
+def test_she_takes_the_door_for_her_next_step(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    house = NS(kind="warp", label="door", dest="Viridian City - House", key="a")
+    mart = NS(kind="warp", label="door", dest="Viridian City - Mart", key="b")
+    north = NS(kind="exit", label="Leave this area by the north side (x)", dest="", key="c")
+    agent.memory.places["3.1"] = "Viridian City"
+    state = NS(badges=0, party=[1], key_items=[], map_name="Viridian City")
+    assert agent._follow_route([house, mart, north], state) == [mart]
+    assert agent._follow_route([house, north], state) == []                             # door not reachable: her call
+    state.badges = 2
+    assert agent._follow_route([house, mart, north], state) == []                       # guided part is over
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

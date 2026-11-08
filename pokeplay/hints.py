@@ -30,6 +30,30 @@ THROUGH_MT_MOON = "Go all the way through Mt. Moon and out the far side onto Rou
 MISTY = "In Cerulean City, heal at the Pokémon Center, then go into the Gym and beat the leader, Misty."
 
 
+# For each step: where she is -> the exit direction or door name that moves her forward.
+ROUTE = {
+    TO_VIRIDIAN: {"Pallet Town": "north", "Route 1": "north"},
+    GET_PARCEL: {"Viridian City": "Viridian City - Mart"},
+    PARCEL: {"Viridian City": "south", "Route 1": "south", "Pallet Town": "Professor Oak's Lab"},
+    TO_FOREST: {"Pallet Town": "north", "Route 1": "north", "Viridian City": "north",
+                "Route 2": "Viridian Forest - South Entrance",
+                "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"},
+    THROUGH_FOREST: {"Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
+                     "Route 2": "north"},
+    BROCK: {"Route 2": "north", "Pewter City": "Pewter City - Gym"},
+}
+
+
+def target_for(step: str, place: str) -> str:
+    """The exit direction or door name she should take now, or "" to leave it up to her."""
+    route = ROUTE.get(step)
+    if not route or place in route.values():    # no route for this step, or she's arrived: talk, fight, explore
+        return ""
+    if place in route:
+        return route[place]
+    return place.split(" - ")[0] if " - " in place else ""      # inside the wrong building: back outside
+
+
 def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str], delivered: bool) -> str:
     def been(name: str) -> bool:
         return any(name in place for place in places)
