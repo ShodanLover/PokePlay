@@ -37,6 +37,10 @@ No game data is stored in this repo.
 
 ## Setup (Windows)
 
+> **Shortcut:** download this repo (green **Code** button → **Download ZIP**), unzip it, and double-click
+> **`setup.bat`**. It installs Python, mGBA, Ollama and OBS, downloads the AI model, and creates your
+> `config.toml`. Then skip to step 4 below. The manual steps are here if anything goes wrong.
+
 You need: a **Pokémon FireRed (US) ROM dumped from your own cartridge**, and about 5 GB of disk space.
 
 ### 1. Install the software (all free)
