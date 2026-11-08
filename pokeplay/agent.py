@@ -16,7 +16,7 @@ from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
 from .menus import Menu, MenuReader
-from .naming import MAX_CHARS, NamingScreen
+from .naming import MAX_CHARS, NamingScreen, clean_name
 from .narrator import Narrator
 from .overlay.server import OverlayState, start_overlay
 from .overworld import Overworld
@@ -128,6 +128,28 @@ class Agent:
             self.brain.style = self.cfg.brain.speaking_style
         self.overlay.update(streamer=persona["name"])
         print(f"She is: {persona['name']} - {persona.get('personality', '')}")
+
+    def _take_name(self, name: str) -> None:
+        """The name she gives her character becomes her name (unless streamer_name is set in config.toml)."""
+        if not name or self.cfg.brain.streamer_name:
+            return
+        path = self.cfg.brain.persona_file
+        try:
+            with open(path, encoding="utf-8") as f:
+                persona = json.load(f)
+        except (OSError, ValueError):
+            persona = {}
+        old = persona.get("name", "")
+        if old:                                   # e.g. a catchphrase that mentions her old name
+            persona = {k: v.replace(old, name) if isinstance(v, str) else v for k, v in persona.items()}
+        persona["name"] = name
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(persona, f, indent=2, ensure_ascii=False)
+        self.brain.name = name
+        self.brain.personality = persona.get("personality", "")
+        self.brain.catchphrase = persona.get("catchphrase", "")
+        self.overlay.update(streamer=name)
+        print(f"She now goes by: {name}")
 
     def run(self) -> None:
         self.start()
@@ -405,6 +427,8 @@ class Agent:
             self._speak(say)
         self.overlay.update(thought=f"Typing the name: {name}")
         if name and self.naming.type_name(name):
+            if kind == "player":
+                self._take_name(clean_name(name, MAX_CHARS["player"]))
             what = {"player": "yourself", "rival": "your rival"}.get(kind, f"your {species}")
             self.memory.add_journal(f"You named {what} '{name}'.")
             self._event(f"You named {what} '{name}'.")

@@ -20,8 +20,10 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   visited, no type chart. She learns only from what she sees and is told on stream (her journal).
 - **Nothing scripted except safety rules.** All speech is generated live. The only fixed rules are
   safety: family-friendly, Twitch guidelines, no hate or harassment.
-- **She chose her own identity** on first launch: **PikaPunch** (in `persona.json`, not in git). The
-  owner kept the name. New self-chosen names are blocked if they're Pokémon-derived.
+- **She names herself when she makes her character.** The name she types on the game's player naming
+  screen becomes her name (`persona.json`, not in git), replacing the one she invented on first launch
+  (currently **PikaPunch**). Only a new game reaches that screen. `streamer_name` in `config.toml` must stay
+  empty, or it overrides her choice. New self-chosen names are blocked if they're Pokémon-derived.
 - **Personality:** offbeat, dry humor, gets a little unhinged when things go wrong, but **not cringe**.
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
   only goes in the stream greeting). Style rules are in `brain.py` (`DEFAULT_STYLE`), and the
@@ -46,13 +48,14 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 
 ## Current status
 
-- All code is written and pushed. **38 tests pass** (`python -m pytest`; needs `pip install pytest lupa`).
+- All code is written and pushed. **42 tests pass** (`python -m pytest`; needs `pip install pytest lupa`).
 - **Never verified against the real game yet.** All memory addresses come from the pret/pokefirered
   decompilation, and the logic is tested with simulated memory. The first real runs showed she walks,
   talks, names things and explores. The menus (Bag, TM Case, catching, shops, move forgetting) are
   the least proven and the most timing-sensitive.
-- **Right now:** the owner said **OBS isn't working** and wants help setting it up on this PC
-  (see the OBS section below). Diagnose first (ask what they see), then fix.
+- **OBS:** PokePlay has its own OBS scene collection and profile, both named **PokePlay**, so the owner's
+  separate `Christmas 24-7` YouTube stream stays untouched. Don't add PokePlay changes to the Christmas files.
+  Twitch sign-in on the PokePlay profile is done by the owner.
 
 ## OBS setup (target layout)
 

@@ -111,10 +111,7 @@ def test_brain_against_fake_ollama():
         def do_POST(self):  # noqa: N802
             body = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
             seen["body"] = body
-            if "format" in body:
-                content = json.dumps({"thought": "The lab is where Oak is.", "say": "To the lab!", "choice": 2})
-            else:
-                content = "Wow, what a battle!"
+            content = json.dumps({"thought": "The lab is where Oak is.", "say": "To the lab!", "choice": 2})
             out = json.dumps({"message": {"role": "assistant", "content": content}}).encode()
             self.send_response(200)
             self.send_header("Content-Length", str(len(out)))
@@ -130,5 +127,6 @@ def test_brain_against_fake_ollama():
     d = brain.decide("CONTEXT", ["Go north", "Enter the lab", "Talk to mom"])
     assert d.choice == 1 and d.say == "To the lab!" and not d.fallback
     assert seen["body"]["think"] is False and seen["body"]["format"]["required"]
-    assert brain.comment(["We won"], "CONTEXT") == "Wow, what a battle!"
+    assert brain.comment(["We won"], "CONTEXT") == "To the lab!"
+    assert seen["body"]["format"]["required"] == ["say"]
     srv.shutdown()

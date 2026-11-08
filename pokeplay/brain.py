@@ -70,6 +70,10 @@ DEFAULT_STYLE = (
 )
 
 
+# Lines that are her repeating her instructions rather than talking to viewers. Never read these out.
+LEAKED_INSTRUCTIONS = re.compile(r"\bthe user\b|\bunder \d+ words\b|\bshort (spoken )?sentences\b|\bin first person\b", re.I)
+
+
 class BrainOffline(RuntimeError):
     """Ollama can't be reached; the agent waits and retries instead of acting blindly."""
 
@@ -251,16 +255,23 @@ class Brain:
             (context + "\n\n" if context else "")
             + f"You get to type a name for {what}. It must be at most {max_chars} characters, "
             "using only English letters, digits, spaces and . , ! ? - ' "
-            + ("You might want to use your own name or a short version of it. " if kind == "player" else "")
+            + ("This character is you, and whatever you type is the name you'll go by from now on. Choose "
+               "any name you like; it doesn't have to be the name you've used so far. " if kind == "player" else "")
             + 'Reply with JSON: {"name": "...", "say": "one or two sentences out loud about why you picked it"}'
         )
         messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]
-        try:
-            data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
-            return str(data.get("name", "")).strip(), str(data.get("say", "")).strip()
-        except Exception as e:  # noqa: BLE001
-            print(f"[brain] naming failed: {e}")
-            return "", ""
+        for _ in range(3 if kind == "player" else 1):
+            try:
+                data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
+            except Exception as e:  # noqa: BLE001
+                print(f"[brain] naming failed: {e}")
+                return "", ""
+            name = str(data.get("name", "")).strip()
+            if kind == "player" and looks_pokemon_derived(name):
+                print(f"[brain] '{name}' sounds like it came from Pokémon; asking again")
+                continue
+            return name, str(data.get("say", "")).strip()
+        return "", ""
 
     def reflect(self, context: str) -> dict:
         """Step back: update her goal and mood, maybe write a journal entry."""
@@ -314,16 +325,22 @@ class Brain:
         prompt = (
             f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to your viewers in one or two short spoken sentences (under 35 words total). "
-            "No emojis, no hashtags, no quotation marks."
+            "No emojis, no hashtags, no quotation marks. "
+            'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
         )
         messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]
+        schema = {"type": "object", "properties": {"say": {"type": "string"}}, "required": ["say"]}
         try:
-            text = self._chat(messages, max_tokens=80)
+            # Structured output: as plain text, small models sometimes "think" their instructions aloud.
+            data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
         except Exception as e:  # noqa: BLE001
             print(f"[brain] comment failed: {e}")
             return ""
-        text = re.sub(r"<think>.*?</think>", "", text, flags=re.S).strip().strip('"')
-        return text.split("\n")[0][:300]
+        text = str(data.get("say", "")).strip().strip('"').split("\n")[0][:300]
+        if LEAKED_INSTRUCTIONS.search(text):
+            print(f"[brain] dropped a line that repeated her instructions: {text[:80]}")
+            return ""
+        return text
 
 
 def _extract_json(text: str) -> str:

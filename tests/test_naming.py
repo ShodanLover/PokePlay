@@ -111,6 +111,54 @@ def test_persona_created_once(tmp_path, monkeypatch):
     assert json.loads(agent.overlay.snapshot())["streamer"] == "Nova"
 
 
+def _named_agent(tmp_path, streamer_name=""):
+    from pokeplay.agent import Agent
+    from pokeplay.config import Config
+
+    cfg = Config()
+    cfg.voice.engine = "none"
+    cfg.brain.streamer_name = streamer_name
+    cfg.brain.persona_file = str(tmp_path / "persona.json")
+    cfg.brain.memory_file = str(tmp_path / "memory.json")
+    (tmp_path / "persona.json").write_text(
+        json.dumps({"name": "Oldname", "personality": "dry wit", "catchphrase": "Oldname says hi"}))
+    agent = Agent(cfg)
+    agent._load_persona()
+    return agent, tmp_path / "persona.json"
+
+
+def test_character_name_becomes_her_name(tmp_path):
+    agent, path = _named_agent(tmp_path)
+    agent._take_name("Flare")
+    saved = json.loads(path.read_text())
+    assert saved["name"] == "Flare" and saved["catchphrase"] == "Flare says hi"
+    assert agent.brain.name == "Flare" and agent.brain.catchphrase == "Flare says hi"
+    assert json.loads(agent.overlay.snapshot())["streamer"] == "Flare"
+
+
+def test_owner_chosen_name_is_not_replaced(tmp_path):
+    agent, path = _named_agent(tmp_path, streamer_name="Fixed")
+    agent._take_name("Flare")
+    assert agent.brain.name == "Fixed" and json.loads(path.read_text())["name"] == "Oldname"
+
+
+def test_character_name_is_not_pokemon_derived():
+    from pokeplay.brain import Brain
+    b = Brain("http://x", "m")
+    replies = iter(['{"name": "Pikachu", "say": "no"}', '{"name": "Flare", "say": "yes"}'])
+    b._chat = lambda *a, **k: next(replies)
+    assert b.choose_name("player", 7) == ("Flare", "yes")
+
+
+def test_leaked_instructions_are_not_spoken():
+    from pokeplay.brain import Brain
+    b = Brain("http://x", "m")
+    b._chat = lambda *a, **k: '{"say": "The user wants me to react in 1-2 short sentences."}'
+    assert b.comment(["We won"], "CONTEXT") == ""
+    b._chat = lambda *a, **k: '{"say": "That went better than expected."}'
+    assert b.comment(["We won"], "CONTEXT") == "That went better than expected."
+
+
 def test_subtitles_follow_voice():
     import time
     from pokeplay.narrator import Narrator
