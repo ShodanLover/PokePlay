@@ -185,8 +185,9 @@ def test_voice_respells_only_what_it_gets_wrong():
     from pokeplay.narrator import pronounceable
     assert pronounceable("My first Pokémon!") == "My first Pokemon!"
     assert pronounceable("POKéMON and Pokémons") == "Pokemon and Pokemons"
-    assert pronounceable("A Poké Ball, a POKé MART, the Pokédex") == "A Pohkay Ball, a Pohkay MART, the Poh-kay-decks"
+    assert pronounceable("A Poké Ball, a POKé MART, the Pokédex") == "A Pohkay Ball, a Pohkay Mart, the Poh-kay-decks"
     assert pronounceable("Should I poke it?") == "Should I poke it?"
+    assert pronounceable("PROF. OAK said my HP is low") == "Prof. Oak said my HP is low"
 
 
 def test_overused_words_are_not_spoken(tmp_path):
@@ -308,6 +309,21 @@ def test_stairs_know_which_way_to_push():
     from pokeplay.game import ARROW_WARPS
     assert ARROW_WARPS[0x6C] == "right" and ARROW_WARPS[0x6F] == "left"     # the two stairs in her house
     assert ARROW_WARPS[0x65] == "down"                                      # front door mat
+
+
+def test_retrying_the_same_thing_gets_taken_away(tmp_path):
+    from types import SimpleNamespace as Opt
+
+    agent, _ = _named_agent(tmp_path)
+    door, person = Opt(key="door"), Opt(key="person")
+    for _ in range(3):
+        assert agent._drop_worn_out([door, person]) == [door, person]
+        agent._note_pick("door")
+    for _ in range(9):
+        assert agent._drop_worn_out([door, person]) == [person]     # has to try something else
+    assert agent._drop_worn_out([door, person]) == [door, person]   # and it comes back later
+    agent._note_pick("door"), agent._note_pick("door"), agent._note_pick("door")
+    assert agent._drop_worn_out([door]) == [door]                   # never left with nothing to do
 
 
 def test_guesses_stay_out_of_her_journal(tmp_path):

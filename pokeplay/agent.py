@@ -28,7 +28,9 @@ MAX_TALK_OPTIONS = 5
 REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 BROWSING_MENUS = {"start", "bag", "tm", "list"}   # menus she opened herself, as opposed to questions the game asks
-LONG_SILENCE = 20           # seconds without a spoken line before the repeat check relaxes
+REPEAT_LIMIT = 3            # the same action this many times in her last 6 means it isn't working
+REST_DECISIONS = 10         # map decisions before she's offered that action again
+LONG_SILENCE = 20          # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
 
@@ -63,6 +65,8 @@ class Agent:
         self._menu_picks: collections.Counter[tuple[str, str]] = collections.Counter()   # since she last left the menus
         self._leaving_menus = False
         self._failed_options: set[str] = set()      # map actions that just didn't work
+        self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
+        self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
         self._last_said = time.time()
         self._menu_cooldown = 0        # map decisions until the main menu is offered again
         self._events: queue.Queue[str] = queue.Queue()
@@ -580,6 +584,18 @@ class Agent:
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         self.memory.save()
 
+    def _note_pick(self, key: str) -> None:
+        """Doing the same thing again and again means it isn't working, wherever she is in the game."""
+        self._recent_picks.append(key)
+        if self._recent_picks.count(key) >= REPEAT_LIMIT:
+            self._worn_out[key] = REST_DECISIONS
+            self._recent_picks.clear()
+
+    def _drop_worn_out(self, options: list) -> list:
+        """Take away what she keeps retrying for a while, so she has to try something else."""
+        self._worn_out = {k: n - 1 for k, n in self._worn_out.items() if n > 1}
+        return [o for o in options if o.key not in self._worn_out] or options
+
     def _overworld_turn(self) -> None:
         self._menu_picks.clear()
         self._leaving_menus = False
@@ -609,6 +625,7 @@ class Agent:
             self._menu_cooldown -= 1
         if hide_menu:
             options = [o for o in options if o.kind != "menu"] or options
+        options = self._drop_worn_out(options)
 
         lines = []
         for o in options:
@@ -627,6 +644,7 @@ class Agent:
         opt = options[decision.choice]
         self._apply_decision(decision, opt.label)
         self.pick_counts[opt.key] += 1
+        self._note_pick(opt.key)
         self._actions_since_discovery += 1
 
         steps_before = self.world.steps_taken

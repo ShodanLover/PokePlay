@@ -20,12 +20,17 @@ import time
 import wave
 
 
+SPELLED_OUT = {"HP", "PP", "TM", "HM", "OK", "TV", "PC", "NES", "AI", "KO"}     # capitals that really are letters
+
+
 def pronounceable(text: str) -> str:
     """Respell words the voice gets wrong. Only what she says changes; subtitles keep the real spelling."""
     text = re.sub(r"\bpok[eé]\s*-?mon", "Pokemon", text, flags=re.I)         # "Pokémon" comes out as "PAH-kay-mun"
     text = re.sub(r"\bpok[eé]\s*-?dex", "Poh-kay-decks", text, flags=re.I)
     text = re.sub(r"\bpok[eé]\s*-?(balls?|mart|cent(?:er|re)|flute)\b", r"Pohkay \1", text, flags=re.I)
-    return re.sub(r"\bpoké\b", "Pohkay", text, flags=re.I)                   # plain "poke" is left as a normal word
+    text = re.sub(r"\bpoké\b", "Pohkay", text, flags=re.I)                   # plain "poke" is left as a normal word
+    # The game writes names in capitals, and the voice spells those out: "OAK" came out as "Oh-aye-kay".
+    return re.sub(r"\b[A-Z]{2,}\b", lambda m: m.group() if m.group() in SPELLED_OUT else m.group().capitalize(), text)
 
 
 class Narrator:
