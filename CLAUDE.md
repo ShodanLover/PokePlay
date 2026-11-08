@@ -22,7 +22,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   are for using things). The owner asked for this so she isn't boring. It must stay free of anything about this game.
   Guesses ("might", "maybe") are not saved to her journal, since she re-reads them as facts.
 - **Running joke (owner's request):** `obsession` in `config.toml` is LeBron James. It only affects what she says,
-  never her decisions, grows with her decision count, and must stay about his public basketball career.
+  never her decisions. The owner wants it only every now and then, and it must stay about his public basketball career.
 - **Nothing scripted except safety rules.** All speech is generated live. The only fixed rules are
   safety: family-friendly, Twitch guidelines, no hate or harassment.
 - **She names herself when she makes her character.** The name she types on the game's player naming

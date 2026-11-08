@@ -345,16 +345,22 @@ def test_party_icon_is_read_from_the_rom():
     assert game.mon_icon(133) == url                    # kept after the first read
 
 
-def test_running_joke_builds_and_stays_out_of_decisions():
-    from pokeplay.brain import Brain
+def test_running_joke_is_only_occasional(monkeypatch):
+    from pokeplay import brain as br
 
-    b = Brain("http://x", "m")
+    b = br.Brain("http://x", "m")
+    monkeypatch.setattr(br.random, "random", lambda: 0.0)
     assert b._obsession_line() == ""                        # off unless it's set
     b.obsession = "A Star"
-    assert "in passing" in b._obsession_line()
-    b.decisions_made = 500
-    assert "completely obsessed" in b._obsession_line() and "basketball" in b._obsession_line()
+    assert "A Star" in b._obsession_line()
     assert "A Star" not in b._system()                      # never part of how she decides
+    b.remember_said("A Star would have made that shot.")
+    assert b._obsession_line() == ""                        # not right after the last mention
+    for i in range(br.OBSESSION_GAP):
+        b.remember_said(f"line {i}")
+    assert "A Star" in b._obsession_line()
+    monkeypatch.setattr(br.random, "random", lambda: 0.9)
+    assert b._obsession_line() == ""                        # most lines don't mention it at all
 
 
 def test_guesses_stay_out_of_her_journal(tmp_path):

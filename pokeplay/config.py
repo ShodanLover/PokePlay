@@ -23,7 +23,7 @@ class BrainConfig:
     context_tokens: int = 4096
     streamer_name: str = ""     # leave empty: the AI picks its own name on first launch
     max_seconds_between_thoughts: float = 7   # she stops waiting for her voice so she keeps moving
-    obsession: str = ""         # a running joke that grows over the run, e.g. a sports star (empty = none)
+    obsession: str = ""         # an occasional running joke, e.g. a sports star (empty = none)
     # The only thing decided for her; she invents the rest of herself.
     persona_hint: str = "a female AI streamer with a dry, offbeat sense of humor who gets a little unhinged when things go wrong"
     speaking_style: str = ""   # how she talks, in your own words (empty = the built-in style)

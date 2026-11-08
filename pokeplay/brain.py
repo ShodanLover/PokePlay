@@ -115,6 +115,9 @@ def _opening(text: str) -> tuple[str, ...]:
     return first if len(first) == 2 and not set(first) & COMMON_WORDS else ()
 
 
+OBSESSION_CHANCE = 0.15     # how often a spoken comment includes her running bit
+OBSESSION_GAP = 8           # lines that must pass before she brings it up again
+
 # Words she leaned on until they got old. Lines using them are thought, not said.
 OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b|\bglitch", re.I)
 
@@ -158,8 +161,7 @@ class Brain:
         self.personality = personality
         self.style = DEFAULT_STYLE
         self.catchphrase = ""
-        self.obsession = ""             # a running bit that builds as the run goes on (config: obsession)
-        self.decisions_made = 0
+        self.obsession = ""             # an occasional running bit (config: obsession)
         self.recent_said: collections.deque[str] = collections.deque(maxlen=30)
         self.temperature = temperature
         self.context_tokens = context_tokens
@@ -380,15 +382,12 @@ class Brain:
             return entries[-keep:]
 
     def _obsession_line(self) -> str:
-        """Her running bit, which starts as a passing mention and grows the longer she plays."""
-        if not self.obsession:
+        """Her running bit: only an occasional aside, and never soon after the last one."""
+        if not self.obsession or random.random() > OBSESSION_CHANCE:
             return ""
-        who, made = self.obsession, self.decisions_made
-        stage = (f"Mention {who} in passing, as a sports fan would." if made < 10 else
-                 f"Now and then, compare what's happening to {who}'s basketball career." if made < 60 else
-                 f"You're getting fixated on {who}'s basketball career, so bring it up often." if made < 200 else
-                 f"You're completely obsessed with {who}'s basketball career and tie almost everything back to it.")
-        return f"{stage} Keep it light and only about his public basketball career. "
+        if any(self.obsession.lower() in said.lower() for said in list(self.recent_said)[-OBSESSION_GAP:]):
+            return ""
+        return f"Work in a quick mention of {self.obsession}'s basketball career, keeping it light. "
 
     def comment(self, events: list[str], context: str) -> str:
         prompt = (

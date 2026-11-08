@@ -46,7 +46,6 @@ class Agent:
         self.overlay = OverlayState()
         self.overlay.update(twitch_channel=cfg.overlay.twitch_channel.strip().lower().rsplit("/", 1)[-1].lstrip("#"))
         self.brain.obsession = cfg.brain.obsession
-        self.brain.decisions_made = self.memory.stats.get("decisions", 0)
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
@@ -561,7 +560,6 @@ class Agent:
         print(f"[brain] {d.thought}  ->  {action_label}")
         self._activity = action_label[:120]
         self.memory.bump("decisions")
-        self.brain.decisions_made = self.memory.stats.get("decisions", 0)
         self.overlay.update(thought=d.thought, action=action_label)
         self.overlay.log(f"▶ {action_label}")
         if d.say and not self.narrator.is_speaking():   # thinking doesn't have to mean talking
