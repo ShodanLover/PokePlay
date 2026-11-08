@@ -158,6 +158,8 @@ class Brain:
         self.personality = personality
         self.style = DEFAULT_STYLE
         self.catchphrase = ""
+        self.obsession = ""             # a running bit that builds as the run goes on (config: obsession)
+        self.decisions_made = 0
         self.recent_said: collections.deque[str] = collections.deque(maxlen=30)
         self.temperature = temperature
         self.context_tokens = context_tokens
@@ -377,12 +379,24 @@ class Brain:
             print(f"[brain] condense failed: {e}")
             return entries[-keep:]
 
+    def _obsession_line(self) -> str:
+        """Her running bit, which starts as a passing mention and grows the longer she plays."""
+        if not self.obsession:
+            return ""
+        who, made = self.obsession, self.decisions_made
+        stage = (f"Mention {who} in passing, as a sports fan would." if made < 10 else
+                 f"Now and then, compare what's happening to {who}'s basketball career." if made < 60 else
+                 f"You're getting fixated on {who}'s basketball career, so bring it up often." if made < 200 else
+                 f"You're completely obsessed with {who}'s basketball career and tie almost everything back to it.")
+        return f"{stage} Keep it light and only about his public basketball career. "
+
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
             f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to yourself in one or two short spoken sentences (under 35 words total). "
             "No emojis, no hashtags, no quotation marks. "
-            'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
+            + self._obsession_line()
+            + 'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
         )
         messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]
         schema = {"type": "object", "properties": {"say": {"type": "string"}}, "required": ["say"]}

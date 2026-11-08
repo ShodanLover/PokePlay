@@ -45,6 +45,8 @@ class Agent:
         self.memory = Memory.load(cfg.brain.memory_file)
         self.overlay = OverlayState()
         self.overlay.update(twitch_channel=cfg.overlay.twitch_channel.strip().lower().rsplit("/", 1)[-1].lstrip("#"))
+        self.brain.obsession = cfg.brain.obsession
+        self.brain.decisions_made = self.memory.stats.get("decisions", 0)
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
@@ -236,7 +238,8 @@ class Agent:
             try:
                 party = self.game.party()
                 self.overlay.update(mode=mode, party=[
-                    {"name": m.nickname, "level": m.level, "hp": m.hp, "max_hp": m.max_hp, "status": m.status}
+                    {"name": m.nickname, "level": m.level, "hp": m.hp, "max_hp": m.max_hp, "status": m.status,
+                     "sprite": self.game.mon_icon(m.species)}
                     for m in party])
             except Exception:  # noqa: BLE001
                 pass
@@ -314,12 +317,13 @@ class Agent:
                 batch = [self._events.get(timeout=2)]
             except queue.Empty:
                 quiet_for = time.time() - self.narrator.last_spoke
-                if silence and quiet_for >= silence and not self.narrator.is_speaking() and self._context:
+                if silence and quiet_for >= silence and not self.narrator.is_speaking():
                     for _ in range(2):              # a line can be dropped as a repeat: try once more
                         line = self.brain.comment(
                             [f"It's been quiet for a bit. Right now you're: {self._activity}. Think out loud about "
                              "whatever is on your mind: what you're doing, your team, your plan, something you "
-                             "noticed, or how it's going. Say something you haven't said yet."], self._context)
+                             "noticed, or how it's going. Say something you haven't said yet."],
+                            self._context or "You've only just started playing.")
                         if line and self._speak(line):
                             break
                     self.narrator.last_spoke = time.time()   # don't retry instantly if it failed
@@ -557,6 +561,7 @@ class Agent:
         print(f"[brain] {d.thought}  ->  {action_label}")
         self._activity = action_label[:120]
         self.memory.bump("decisions")
+        self.brain.decisions_made = self.memory.stats.get("decisions", 0)
         self.overlay.update(thought=d.thought, action=action_label)
         self.overlay.log(f"▶ {action_label}")
         if d.say and not self.narrator.is_speaking():   # thinking doesn't have to mean talking

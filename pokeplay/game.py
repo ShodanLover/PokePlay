@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
+import base64
 import struct
+import zlib
 from dataclasses import dataclass, field
 
 from . import addresses as A
 from .emulator import Emulator
 from .maps import map_name
 from .text import decode
+
+_ICONS: dict[int, str] = {}     # party icons already read from the ROM
+
+
+def _png(width: int, height: int, rgba: bytes) -> bytes:
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data))
+    rows = b"".join(b"\0" + rgba[y * width * 4:(y + 1) * width * 4] for y in range(height))
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 6, 0, 0, 0))
+            + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b""))
+
 
 TYPE_NAMES = [
     "Normal", "Fighting", "Flying", "Poison", "Ground", "Rock", "Bug", "Ghost",
@@ -464,6 +477,27 @@ class Game:
         return MapGrid(width, height, blocked, behavior)
 
     # ---- everything ----------------------------------------------------------
+    def mon_icon(self, species: int) -> str:
+        """The party icon for a species, read from the ROM, as a PNG data URL (kept once read)."""
+        if species in _ICONS:
+            return _ICONS[species]
+        pointer = self.emu.u32(A.gMonIconTable + species * 4)
+        tiles = self.emu.read(pointer, 512)
+        palette_index = self.emu.u8(A.gMonIconPaletteIndices + species)
+        palette = struct.unpack("<16H", self.emu.read(self.emu.u32(A.gMonIconPaletteTable + palette_index * 8), 32))
+        pixels = bytearray(32 * 32 * 4)
+        for tile in range(16):                  # 4 x 4 tiles of 8 x 8 pixels, 4 bits per pixel
+            for y in range(8):
+                for x in range(8):
+                    byte = tiles[tile * 32 + y * 4 + x // 2]
+                    color_index = (byte >> 4) if x % 2 else (byte & 15)
+                    if color_index:             # color 0 is see-through
+                        c = palette[color_index]
+                        at = (((tile // 4) * 8 + y) * 32 + (tile % 4) * 8 + x) * 4
+                        pixels[at:at + 4] = bytes(((c & 31) << 3, (c >> 5 & 31) << 3, (c >> 10 & 31) << 3, 255))
+        _ICONS[species] = "data:image/png;base64," + base64.b64encode(_png(32, 32, bytes(pixels))).decode()
+        return _ICONS[species]
+
     def message(self) -> str:
         return decode(self.emu.read(A.gStringVar4, 0x3E8))
 

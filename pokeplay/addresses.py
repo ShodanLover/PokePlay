@@ -55,6 +55,9 @@ gBattleMoves = 0x08250C04           # 12 bytes each
 gSpeciesInfo = 0x08254784           # 28 bytes each
 gTypeEffectiveness = 0x0824F050     # (attacker, defender, x10) triples, 0xFF ends
 gItems = 0x083DB028                 # 44 bytes each, name first
+gMonIconTable = 0x083D37A0          # pointer per species: 32x32 party icon, 4bpp tiles
+gMonIconPaletteIndices = 0x083D3E80 # one byte per species
+gMonIconPaletteTable = 0x083D4038   # 8 bytes each, palette pointer first
 gMapGroups = 0x083526A8
 
 NUM_SPECIES = 412

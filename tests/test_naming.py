@@ -188,6 +188,7 @@ def test_voice_respells_only_what_it_gets_wrong():
     assert pronounceable("A Poké Ball, a POKé MART, the Pokédex") == "A Pohkay Ball, a Pohkay Mart, the Poh-kay-decks"
     assert pronounceable("Should I poke it?") == "Should I poke it?"
     assert pronounceable("PROF. OAK said my HP is low") == "Prof. Oak said my HP is low"
+    assert pronounceable("Lebron would run that") == "LeBron would run that"
 
 
 def test_overused_words_are_not_spoken(tmp_path):
@@ -324,6 +325,36 @@ def test_retrying_the_same_thing_gets_taken_away(tmp_path):
     assert agent._drop_worn_out([door, person]) == [door, person]   # and it comes back later
     agent._note_pick("door"), agent._note_pick("door"), agent._note_pick("door")
     assert agent._drop_worn_out([door]) == [door]                   # never left with nothing to do
+
+
+def test_party_icon_is_read_from_the_rom():
+    import base64
+    import struct
+    from pokeplay import addresses as A
+    from test_core import make_game
+
+    game = make_game()
+    game.emu.write(A.gMonIconTable + 133 * 4, struct.pack("<I", 0x08800000))
+    game.emu.write(0x08800000, bytes([0x01] * 512))
+    game.emu.write(A.gMonIconPaletteIndices + 133, bytes([2]))
+    game.emu.write(A.gMonIconPaletteTable + 16, struct.pack("<I", 0x08810000))
+    game.emu.write(0x08810000, struct.pack("<16H", *range(16)))
+    url = game.mon_icon(133)
+    assert url.startswith("data:image/png;base64,")
+    assert base64.b64decode(url.split(",", 1)[1]).startswith(b"\x89PNG")
+    assert game.mon_icon(133) == url                    # kept after the first read
+
+
+def test_running_joke_builds_and_stays_out_of_decisions():
+    from pokeplay.brain import Brain
+
+    b = Brain("http://x", "m")
+    assert b._obsession_line() == ""                        # off unless it's set
+    b.obsession = "A Star"
+    assert "in passing" in b._obsession_line()
+    b.decisions_made = 500
+    assert "completely obsessed" in b._obsession_line() and "basketball" in b._obsession_line()
+    assert "A Star" not in b._system()                      # never part of how she decides
 
 
 def test_guesses_stay_out_of_her_journal(tmp_path):

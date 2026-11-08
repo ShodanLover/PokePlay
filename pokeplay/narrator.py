@@ -25,6 +25,7 @@ SPELLED_OUT = {"HP", "PP", "TM", "HM", "OK", "TV", "PC", "NES", "AI", "KO"}     
 
 def pronounceable(text: str) -> str:
     """Respell words the voice gets wrong. Only what she says changes; subtitles keep the real spelling."""
+    text = re.sub(r"\blebron\b", "LeBron", text, flags=re.I)                 # "Lebron" comes out as "LEB-ron"
     text = re.sub(r"\bpok[eé]\s*-?mon", "Pokemon", text, flags=re.I)         # "Pokémon" comes out as "PAH-kay-mun"
     text = re.sub(r"\bpok[eé]\s*-?dex", "Poh-kay-decks", text, flags=re.I)
     text = re.sub(r"\bpok[eé]\s*-?(balls?|mart|cent(?:er|re)|flute)\b", r"Pohkay \1", text, flags=re.I)

@@ -29,12 +29,14 @@
   #chat .who { font-weight: 700; margin-right: 8px; }
   #chat .note { color: var(--muted); }
   .team { flex: none; }
-  #team { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 34px; gap: 6px 16px; min-height: 114px; align-content: start; }
+  #team { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 64px; gap: 4px 16px; min-height: 200px; align-content: start; }
   .empty { grid-column: 1 / 3; color: var(--muted); font-size: 18px; }
-  .mon { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-content: center; row-gap: 4px; }
+  .mon { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .mon img { flex: none; width: 64px; height: 64px; image-rendering: pixelated; }
+  .mon .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
   .mon .name { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .mon .lv { font-size: 14px; color: var(--muted); align-self: center; white-space: nowrap; }
-  .mon .hp { grid-column: 1 / 3; height: 6px; background: rgba(255,255,255,.14); border-radius: 4px; overflow: hidden; }
+  .mon .lv { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mon .hp { height: 6px; background: rgba(255,255,255,.14); border-radius: 4px; overflow: hidden; }
   .mon .hp > div { height: 100%; }
 </style>
 </head>
@@ -127,7 +129,8 @@
     team.replaceChildren(...party.slice(0, 6).map(m => {
       const f = m.max_hp ? m.hp / m.max_hp : 0;
       const row = document.createElement("div"); row.className = "mon";
-      row.innerHTML = '<span class="name"></span><span class="lv"></span><div class="hp"><div></div></div>';
+      row.innerHTML = '<img alt=""><div class="info"><span class="name"></span><span class="lv"></span><div class="hp"><div></div></div></div>';
+      if (m.sprite) row.querySelector("img").src = m.sprite;
       row.querySelector(".name").textContent = m.name;
       row.querySelector(".lv").textContent = "Lv " + m.level + (m.status ? " · " + m.status : "");
       const hp = row.querySelector(".hp > div"); hp.style.width = (f * 100) + "%"; hp.style.background = hpColor(f);
