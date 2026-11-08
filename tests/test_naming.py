@@ -243,6 +243,13 @@ def test_questions_the_game_asks_are_never_cut_off(tmp_path):
     assert agent.pressed == [] and not agent._leaving_menus and len(agent.prompts) == 5
 
 
+def test_speak_reports_whether_she_said_it(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.narrator.say = lambda text: None
+    assert agent._speak("That fence looks freshly painted.") is True
+    assert agent._speak("That fence looks freshly painted.") is False
+
+
 def test_guesses_stay_out_of_her_journal(tmp_path):
     from pokeplay.brain import Decision
 

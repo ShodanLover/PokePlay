@@ -54,7 +54,7 @@ class OverlayConfig:
 class CommentaryConfig:
     enabled: bool = True
     min_seconds_between: float = 8
-    max_silence_seconds: float = 25   # if she's been quiet this long, she thinks out loud
+    max_silence_seconds: float = 12   # if she's been quiet this long, she thinks out loud
 
 
 @dataclass

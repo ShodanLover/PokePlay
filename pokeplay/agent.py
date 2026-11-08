@@ -308,12 +308,13 @@ class Agent:
             except queue.Empty:
                 quiet_for = time.time() - self.narrator.last_spoke
                 if silence and quiet_for >= silence and not self.narrator.is_speaking() and self._context:
-                    line = self.brain.comment(
-                        [f"It's been quiet for a bit. Right now you're: {self._activity}. Think out loud about "
-                         "whatever is on your mind: what you're doing, your team, your plan, something you "
-                         "noticed, or how it's going."], self._context)
-                    if line:
-                        self._speak(line)
+                    for _ in range(2):              # a line can be dropped as a repeat: try once more
+                        line = self.brain.comment(
+                            [f"It's been quiet for a bit. Right now you're: {self._activity}. Think out loud about "
+                             "whatever is on your mind: what you're doing, your team, your plan, something you "
+                             "noticed, or how it's going. Say something you haven't said yet."], self._context)
+                        if line and self._speak(line):
+                            break
                     self.narrator.last_spoke = time.time()   # don't retry instantly if it failed
                 continue
             time.sleep(1.0)    # group things that happen close together
@@ -327,19 +328,20 @@ class Agent:
                 self._speak(line)
                 last = time.time()
 
-    def _speak(self, text: str) -> None:
-        """Say a line out loud, unless it's basically a repeat of something she just said."""
+    def _speak(self, text: str) -> bool:
+        """Say a line out loud, unless it's basically a repeat of something she just said. True if it was said."""
         text = clean_spoken(text, self.brain.name)
         if not text:
-            return
+            return False
         if OVERUSED_WORDS.search(text):
             print(f"[voice] (skipped overused word) {text}")
-            return
+            return False
         if self.brain.is_repeat(text):
             print(f"[voice] (skipped repeat) {text}")
-            return
+            return False
         self.brain.remember_said(text)
         self.narrator.say(text)
+        return True
 
     # ------------------------------------------------------------------ battle choices (hers)
     def _battle_context(self, info: BattleInfo) -> str:
