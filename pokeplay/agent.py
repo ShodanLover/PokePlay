@@ -6,6 +6,7 @@ import collections
 import difflib
 import json
 import queue
+import random
 import threading
 import time
 
@@ -41,7 +42,8 @@ EVENT_MAX_AGE = 6        # seconds after which something that happened is too ol
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
-LONG_SILENCE = 10         # seconds without a spoken line before the repeat check relaxes
+SPEAK_DECISION_CHANCE = 0.3 # the rest of her talking comes from comments, which vary far more
+LONG_SILENCE = 15        # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
 
@@ -652,7 +654,8 @@ class Agent:
         self.memory.bump("decisions")
         self.overlay.update(thought=d.thought, action=action_label)
         self.overlay.log(f"▶ {action_label}")
-        if d.say and not self.narrator.is_speaking():   # thinking doesn't have to mean talking
+        # Most decision lines are just "here's what I'm doing", so she usually keeps these to herself.
+        if d.say and not self.narrator.is_speaking() and random.random() < SPEAK_DECISION_CHANCE:
             self._speak(d.say)
         if d.note and self._worth_noting(d.note):
             self.memory.add_journal(d.note)

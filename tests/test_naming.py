@@ -162,8 +162,18 @@ def test_leaked_instructions_are_not_spoken():
     assert b.comment(["We won"], "CONTEXT") == "That went better than expected."
 
 
-def test_voice_never_holds_up_her_next_thought(tmp_path):
+def test_every_comedy_angle_comes_up_before_any_repeats():
+    from pokeplay.brain import COMEDY_ANGLES, Brain
+
+    b = Brain("http://x", "m")
+    assert sorted(b._next_angle() for _ in COMEDY_ANGLES) == sorted(COMEDY_ANGLES)
+
+
+def test_voice_never_holds_up_her_next_thought(tmp_path, monkeypatch):
+    from pokeplay import agent as agent_module
     from pokeplay.brain import Decision
+
+    monkeypatch.setattr(agent_module.random, "random", lambda: 0.0)
 
     agent, _ = _named_agent(tmp_path)
     agent._think_seconds = 4.0
@@ -289,7 +299,7 @@ def test_long_silence_relaxes_the_repeat_check(tmp_path):
     agent, _ = _named_agent(tmp_path)
     agent.narrator.say = lambda text: None
     assert agent._speak("Blinking bag! I wonder what the little red shelf is for.")
-    similar = "Blinking bag! Maybe the little red shelf does something useful."
+    similar = "Blinking bag! Maybe all those cupboards are secretly connected somehow."
     assert agent._speak(similar) is False                  # she only just spoke
     agent._last_said = time.time() - 30
     assert agent._speak(similar) is True                   # silence is worse than a similar line

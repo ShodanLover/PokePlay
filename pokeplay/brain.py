@@ -121,7 +121,21 @@ def _opening(text: str) -> tuple[str, ...]:
     return first if len(first) == 2 and not set(first) & COMMON_WORDS else ()
 
 
-OBSESSION_CHANCE = 0.1      # how often a spoken comment includes her running bit (1 in 10)
+# Filters can only delete lines. These make the lines different in the first place.
+COMEDY_ANGLES = [
+    "a nature documentary narrator", "an over-excited sports commentator", "breaking news on a tiny local station",
+    "a tired detective in a noir film", "a villain mid-monologue", "a strongly worded complaint letter",
+    "a smug expert who is clearly wrong", "a soap opera cliffhanger", "a cooking show host",
+    "a whispered panic", "a weary medieval knight", "a weather forecast about your feelings",
+    "a tiny dramatic poem", "a movie trailer voice", "a motivational speaker who has given up",
+    "a rating out of ten, given with total confidence", "a conspiracy theorist who has connected the dots",
+    "someone deeply suspicious of whatever is nearest", "someone taking this as a personal insult",
+    "a business pitch nobody asked for", "a flirty line to the nearest inanimate object",
+    "a love confession to a piece of furniture or scenery", "a game show host", "an auctioneer",
+    "a pirate who is new to the job", "an overly formal butler", "someone giving terrible life advice based on this",
+]
+
+OBSESSION_CHANCE = 0.1     # how often a spoken comment includes her running bit (1 in 10)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
 NEWS_CHANCE = 0.1           # how often a spoken comment remarks on a real headline (1 in 10)
 
@@ -170,6 +184,7 @@ class Brain:
         self.catchphrase = ""
         self.obsession = ""             # an occasional running bit (config: obsession)
         self.headlines = None           # function returning a real headline to remark on, or ""
+        self._angles: list[str] = []    # comedic styles left before the list reshuffles
         self.recent_said: collections.deque[str] = collections.deque(maxlen=30)
         self.temperature = temperature
         self.context_tokens = context_tokens
@@ -251,8 +266,8 @@ class Brain:
         """True if this line is basically something she just said. Lenient only rejects near-copies."""
         t = text.lower()
         if lenient:
-            return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.7
-                       for old in list(self.recent_said)[-5:])
+            return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.6
+                       for old in list(self.recent_said)[-8:])
         if set(_words(text)) & self.worn_topics():
             return True
         phrases, opening = _phrases(text), _opening(text)
@@ -410,6 +425,12 @@ class Brain:
             return ""
         return f"Work in a quick mention of {self.obsession}'s basketball career, keeping it light. "
 
+    def _next_angle(self) -> str:
+        """A different comedic style for each line, using them all before any comes up again."""
+        if not self._angles:
+            self._angles = random.sample(COMEDY_ANGLES, len(COMEDY_ANGLES))
+        return self._angles.pop()
+
     def _headline_line(self) -> str:
         """Now and then, a real headline to remark on (her model doesn't know the news and would invent it)."""
         if not self.headlines or random.random() > NEWS_CHANCE:
@@ -423,9 +444,10 @@ class Brain:
 
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
-            f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
-            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Make it strange, funny and "
-            "a bit deranged, not plain. If an object is involved, you may flirt with it playfully. "
+            # Her recent lines stay out of this prompt on purpose: a small model riffs on whatever it's shown.
+            f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
+            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Make it strange and funny. "
+            f"Deliver this line in this style: {self._next_angle()}. Keep it about what actually happened. "
             "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())
             + 'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
