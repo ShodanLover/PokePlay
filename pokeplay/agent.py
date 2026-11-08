@@ -41,7 +41,7 @@ EVENT_MAX_AGE = 10         # seconds after which something that happened is too 
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
-LONG_SILENCE = 20          # seconds without a spoken line before the repeat check relaxes
+LONG_SILENCE = 10         # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
 
@@ -354,7 +354,7 @@ class Agent:
             except queue.Empty:
                 quiet_for = time.time() - self.narrator.last_spoke
                 if silence and quiet_for >= silence and not self.narrator.is_speaking():
-                    for _ in range(2):              # a line can be dropped as a repeat: try once more
+                    for _ in range(3):              # a line can be dropped as a repeat: try again
                         line = self.brain.comment(
                             [f"It's been quiet for a bit. Right now you're: {self._activity}. Think out loud about "
                              "whatever is on your mind: what you're doing, your team, your plan, something you "

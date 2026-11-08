@@ -434,8 +434,9 @@ def test_overused_words_are_named_and_blocked():
     for line in ("My turnip is weird.", "Still thinking about that turnip.", "One more turnip thought."):
         b.remember_said(line)
     assert b.worn_topics() == {"turnip"} and "DON'T USE THEM NOW: turnip" in b._recent_block()
-    assert b.is_repeat("That turnip again, honestly.", lenient=True)
-    assert not b.is_repeat("There's a sign by the fence over here.", lenient=True)
+    assert b.is_repeat("That turnip again, honestly.")
+    assert not b.is_repeat("There's a sign by the fence over here.")
+    assert not b.is_repeat("That turnip again, honestly.", lenient=True)    # silence is worse than a worn word
 
 
 def test_lines_that_waited_too_long_are_not_said():

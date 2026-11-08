@@ -246,11 +246,11 @@ class Brain:
     def is_repeat(self, text: str, lenient: bool = False) -> bool:
         """True if this line is basically something she just said. Lenient only rejects near-copies."""
         t = text.lower()
-        if set(_words(text)) & self.worn_topics():
-            return True
         if lenient:
             return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.7
                        for old in list(self.recent_said)[-5:])
+        if set(_words(text)) & self.worn_topics():
+            return True
         phrases, opening = _phrases(text), _opening(text)
         return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.62
                    or phrases & _phrases(old)
