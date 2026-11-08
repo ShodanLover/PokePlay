@@ -28,6 +28,20 @@ FIRST_TIMER = (
 )
 
 
+# Ordinary video-game sense. Nothing here is about this particular game, so she's still a true first-timer.
+GAME_SENSE = (
+    "You do know how video games work in general. You play by picking from your list of actions and the "
+    "buttons are handled for you, so never worry about which button is which and ignore on-screen tips "
+    "about buttons. Menus are for using things you already have, not for exploring. Games move forward when "
+    "you go to new places and talk to new people, so head for doors, stairs and exits you haven't used yet, "
+    "and go outside. Don't search empty corners for secrets. You can't restart or reset the game. "
+    "Don't keep saying that you know nothing: talk about what's in front of you. "
+)
+
+# A journal is for what actually happened. Saved guesses get re-read as facts, and she talks herself in circles.
+GUESSWORK = re.compile(r"\b(?:might|maybe|could|perhaps|probably|possibly|not sure|i think|seems?)\b|\breset", re.I)
+
+
 # Pieces of Pokémon names: a first-timer couldn't pick a streamer name built from these.
 POKEMON_NAME_BITS = ("pika", "poke", "poké", "chu", "eevee", "bulba", "squirt", "charmand", "charizard",
                      "mew", "jiggly", "snorlax", "gengar", "psyduck", "togep", "ketchum", "trainer")
@@ -193,6 +207,7 @@ class Brain:
             + (f"Your personality: {self.personality} " if self.personality else "")
             + "You are fully in control of the game; you choose from a numbered list of actions. "
             + FIRST_TIMER
+            + GAME_SENSE
             + "You can't see any viewers or chat, so never greet them or talk to them. "
             "You set your own goals. You think out loud to yourself, in first person, fully in "
             "your own voice and personality. Just talk: never start a line with your own name or a "
@@ -227,7 +242,7 @@ class Brain:
             '{"thought": "your reasoning, 1-2 sentences", '
             '"say": "think out loud in 1-3 short spoken sentences: what you notice and why you chose this", '
             '"choice": <action number>, '
-            '"note": "optional: something you learned that is worth writing in your journal, or empty", '
+            '"note": "optional: a fact you actually saw happen that is worth writing in your journal (no guesses), or empty", '
             '"goal": "optional: your new goal if you want to change it, or empty"}'
         )
         messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]

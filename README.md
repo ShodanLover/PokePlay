@@ -35,8 +35,8 @@ It runs **completely free** on your own PC: no paid AI services and no subscript
   safety rules: family-friendly, within Twitch guidelines, no hate or harassment.
 - **Subtitles:** everything she says is shown word-for-word. The AI writes her words and the voice
   reads them, so captions are free and exact.
-- An **overlay** shows her thoughts, her own goal and mood, and your Twitch chat (set `twitch_channel` in
-  `config.toml`; it's display only and never reaches the AI). Her team sits in the subtitle bar along the bottom.
+- An **overlay** shows your Twitch chat and her team on the right (set `twitch_channel` in `config.toml`; chat is
+  display only and never reaches the AI), with her live subtitles in a box centered at the bottom.
 
 **One honest limit:** the AI model learned from the internet, so somewhere inside it does know
 Pokémon. She's told to ignore that and only trust what she learns on stream, but a small model will
@@ -156,7 +156,7 @@ Also:
    - **Browser** source → URL `http://127.0.0.1:8765`, Width **1920**, Height **1080**. The panel
      sits on the right side.
    - **Browser** source → URL `http://127.0.0.1:8765/subtitles`, Width **1920**, Height **1080**, placed just
-     below the Avatar in the Sources list. This is the bar along the bottom with her live subtitles.
+     below the Avatar in the Sources list. This is the box at the bottom with her live subtitles.
    - **Browser** source → URL `http://127.0.0.1:8765/avatar`, Width **1920**, Height **1080**. This is her
      animated pixel-art avatar in the bottom-right corner (blinks, talks, grins, glitches).
    - **Audio**: OBS's **Desktop Audio** picks up both the game and her voice. To make her louder than

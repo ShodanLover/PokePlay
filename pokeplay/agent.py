@@ -10,7 +10,7 @@ import time
 
 from . import addresses as A
 from .battle import BattlePilot, Choice, hp_bar
-from .brain import OVERUSED_WORDS, Brain, BrainOffline, clean_spoken
+from .brain import GUESSWORK, OVERUSED_WORDS, Brain, BrainOffline, clean_spoken
 from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
@@ -500,7 +500,7 @@ class Agent:
         if journal:
             parts.append("YOUR JOURNAL (what you've learned so far):\n" + "\n".join(f"- {j}" for j in journal))
         else:
-            parts.append("YOUR JOURNAL is empty. You've just started and know nothing yet.")
+            parts.append("YOUR JOURNAL is empty. You've just started.")
         if not short and m.lessons:
             parts.append("THINGS YOU'VE NOTICED:\n" + "\n".join(f"- {l}" for l in m.lessons[-6:]))
         return "\n\n".join(parts)
@@ -550,7 +550,7 @@ class Agent:
         self.overlay.log(f"▶ {action_label}")
         if d.say and not self.narrator.is_speaking():   # thinking doesn't have to mean talking
             self._speak(d.say)
-        if d.note:
+        if d.note and not GUESSWORK.search(d.note):
             self.memory.add_journal(d.note)
         if d.goal:
             self.memory.goal = d.goal[:200]
@@ -566,7 +566,7 @@ class Agent:
             self.memory.goal = r["goal"][:200]
         if r.get("mood"):
             self.memory.mood = r["mood"][:40]
-        if r.get("journal"):
+        if r.get("journal") and not GUESSWORK.search(r["journal"]):
             self.memory.add_journal(r["journal"])
         if len(self.memory.journal) > JOURNAL_LIMIT:
             self.memory.journal = self.brain.condense(self.memory.journal)
@@ -597,8 +597,10 @@ class Agent:
         talks = sorted((o for o in options if o.kind == "talk"), key=lambda o: o.distance)[:MAX_TALK_OPTIONS]
         options = [o for o in options if o.kind != "talk"] + talks
         options.sort(key=lambda o: (KIND_ORDER.get(o.kind, 9), o.distance))
-        if self._menu_cooldown > 0:                 # she just got stuck in there: go do something else for a bit
+        hide_menu = self._menu_cooldown > 0 or not self.game.party()   # stuck in there, or nothing to use yet
+        if self._menu_cooldown > 0:
             self._menu_cooldown -= 1
+        if hide_menu:
             options = [o for o in options if o.kind != "menu"] or options
 
         lines = []

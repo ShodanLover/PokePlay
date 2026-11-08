@@ -243,6 +243,24 @@ def test_questions_the_game_asks_are_never_cut_off(tmp_path):
     assert agent.pressed == [] and not agent._leaving_menus and len(agent.prompts) == 5
 
 
+def test_guesses_stay_out_of_her_journal(tmp_path):
+    from pokeplay.brain import Decision
+
+    agent, _ = _named_agent(tmp_path)
+    agent._apply_decision(Decision("t", "", 0, note="The corner might have a hidden ball."), "Go north")
+    agent._apply_decision(Decision("t", "", 0, note="Resetting the game could help."), "Go north")
+    assert agent.memory.journal == []
+    agent._apply_decision(Decision("t", "", 0, note="The stairs lead to the first floor."), "Go north")
+    assert agent.memory.journal == ["The stairs lead to the first floor."]
+
+
+def test_she_has_general_game_sense_but_no_game_knowledge():
+    from pokeplay.brain import GAME_SENSE, Brain
+    assert GAME_SENSE in Brain("http://x", "m")._system()
+    for word in ("Pallet", "Oak", "starter", "gym", "badge"):
+        assert word.lower() not in GAME_SENSE.lower()
+
+
 def test_twitch_channel_reaches_overlay(tmp_path):
     agent, _ = _named_agent(tmp_path)
     assert json.loads(agent.overlay.snapshot())["twitch_channel"] == ""

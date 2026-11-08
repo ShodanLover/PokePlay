@@ -18,6 +18,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **No Twitch chat hints.** Chat must not influence the game. (Chat moderation is the owner's job.)
 - **First-timer mode.** She gets **no game knowledge**: no walkthrough, no destination names until
   visited, no type chart. She learns only from what she sees and is told on stream (her journal).
+- **General video-game sense is allowed** (`GAME_SENSE` in `brain.py`: head for new places, ignore button tips, menus
+  are for using things). The owner asked for this so she isn't boring. It must stay free of anything about this game.
+  Guesses ("might", "maybe") are not saved to her journal, since she re-reads them as facts.
 - **Nothing scripted except safety rules.** All speech is generated live. The only fixed rules are
   safety: family-friendly, Twitch guidelines, no hate or harassment.
 - **She names herself when she makes her character.** The name she types on the game's player naming
@@ -62,8 +65,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 
 - Settings: Stream → Twitch (Connect Account). Output → Simple, **NVIDIA NVENC H.264**, 4500 Kbps.
   Video → 1920x1080, 30 FPS. Advanced → **Automatically Reconnect** on.
-- The side panel shows her thoughts, her goal and Twitch chat (`twitch_channel` in `config.toml`; read-only in the
-  page, it must never reach the AI). Her team is on the left of the subtitle bar. mGBA must stay at 5x, unmaximized:
+- The right column shows Twitch chat (`twitch_channel` in `config.toml`; read-only in the page, it must never reach
+  the AI) above her team. Subtitles are their own centered box at the bottom. mGBA must stay at 6x, unmaximized:
   OBS crops off its menu bar. A `Backdrop` image source (`pokeplay/overlay/background.png`, original
   pixel art with no Nintendo characters or logos) sits behind everything.
 - Sources, top to bottom (top is drawn on top):
@@ -71,9 +74,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   2. **Subtitles**: Browser, `http://127.0.0.1:8765/subtitles`, 1920x1080
   3. **Info Panel**: Browser, `http://127.0.0.1:8765`, 1920x1080
   4. **Game**: Window Capture of mGBA, Capture Method "Windows 10 (1903 and up)" if it's black,
-     Scale Filtering → Point. Set mGBA to View → Frame size → 5x and place the game 1200x800 at (68, 65), so
-     pixels stay sharp. The info panel occupies the right ~600 px; the subtitle bar is the bottom 150 px, ending
-     320 px from the right edge; the avatar sits in that bottom-right corner. **Nothing on stream may overlap.**
+     Scale Filtering → Point. Set mGBA to View → Frame size → 6x and place the game 1440x960 at (12, 12), so
+     pixels stay sharp. The right column is x 1464-1908, ending at y 726; the subtitle box is x 304-1616, y 982-1072;
+     the avatar sits in the bottom-right corner. **Nothing on stream may overlap.**
 - The browser sources only show content while the bot is running (its overlay server is on port 8765).
   Right-click → Refresh if one is blank.
 - Audio: Desktop Audio captures everything. Volume mixer: mGBA ~25-35%, Python (Kokoro voice) 100%.

@@ -4,69 +4,56 @@
 <meta charset="utf-8">
 <title>PokePlay Overlay</title>
 <style>
-  /* Designed for a 1920x1080 OBS canvas: the game on the left, this panel on the right, ending above her avatar. */
+  /* OBS Browser Source: http://127.0.0.1:8765 (1920 x 1080).
+     The right-hand column beside the game: Twitch chat, then her team, ending above her avatar. */
   :root {
-    --bg: rgba(14, 18, 28, 0.86);
+    --bg: rgba(14, 18, 28, 0.92);
     --edge: rgba(255, 255, 255, 0.10);
     --text: #f2f4f8;
     --muted: #9aa4b8;
     --accent: #ffcb3d;
+    --hp-good: #3ddc84;
+    --hp-mid: #ffb02e;
+    --hp-low: #ff5a5f;
   }
   html, body { margin: 0; background: transparent; color: var(--text);
     font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
-  .wrap { position: absolute; top: 24px; right: 24px; width: 560px; height: 690px; overflow: hidden;
-    display: flex; flex-direction: column; gap: 14px; }
-  .card { background: var(--bg); border: 1px solid var(--edge); border-radius: 14px; padding: 16px 20px; box-sizing: border-box; }
-  .thinking { flex: 0 1 auto; min-height: 0; overflow: hidden; }
-  .goal { flex: none; }
-  .chat { flex: 1 0 200px; min-height: 0; display: flex; flex-direction: column; }
+  .wrap { position: absolute; top: 12px; right: 12px; width: 444px; height: 714px; overflow: hidden;
+    display: flex; flex-direction: column; gap: 12px; }
+  .card { background: var(--bg); border: 1px solid var(--edge); border-radius: 14px; padding: 12px 18px; box-sizing: border-box; }
+  .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .label { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  #say { font-size: 30px; line-height: 1.25; font-weight: 600; min-height: 76px; }
-  #say .cursor { display: inline-block; width: 3px; height: 1em; background: var(--accent); margin-left: 3px;
-    vertical-align: -0.15em; animation: blink 1s steps(1) infinite; }
-  @keyframes blink { 50% { opacity: 0; } }
-  #thought { font-size: 19px; color: #cfd5e2; font-style: italic; margin-top: 10px; }
-  #goal { font-size: 18px; line-height: 1.35; }
-  .mood { float: right; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 15px; }
   #chat { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
-    font-size: 19px; line-height: 1.3; }
-  #chat .msg { flex: none; margin-top: 5px; overflow-wrap: anywhere; }
+    font-size: 20px; line-height: 1.3; }
+  #chat .msg { flex: none; margin-top: 6px; overflow-wrap: anywhere; }
   #chat .who { font-weight: 700; margin-right: 8px; }
   #chat .note { color: var(--muted); }
+  .team { flex: none; }
+  #team { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: 34px; gap: 6px 16px; min-height: 114px; align-content: start; }
+  .empty { grid-column: 1 / 3; color: var(--muted); font-size: 18px; }
+  .mon { display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 8px; align-content: center; row-gap: 4px; }
+  .mon .name { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mon .lv { font-size: 14px; color: var(--muted); align-self: center; white-space: nowrap; }
+  .mon .hp { grid-column: 1 / 3; height: 6px; background: rgba(255,255,255,.14); border-radius: 4px; overflow: hidden; }
+  .mon .hp > div { height: 100%; }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div class="card thinking">
-    <div class="label">AI is thinking</div>
-    <div id="say"></div>
-    <div id="thought"></div>
-  </div>
-  <div class="card goal">
-    <div class="label">Her goal <span id="mood" class="mood"></span></div>
-    <div id="goal"></div>
-  </div>
   <div class="card chat">
     <div class="label">Twitch chat</div>
     <div id="chat"><div class="msg note" id="chat-note">Chat will appear here</div></div>
   </div>
+  <div class="card team">
+    <div class="label">Team</div>
+    <div id="team"></div>
+  </div>
 </div>
 <script>
-  let shown = "", target = "";
-  function typeTick() {
-    if (shown !== target) {
-      shown = target.startsWith(shown) ? target.slice(0, shown.length + 1) : "";
-      const el = document.getElementById("say");
-      el.textContent = shown;
-      const c = document.createElement("span"); c.className = "cursor"; el.appendChild(c);
-    }
-  }
-  setInterval(typeTick, 28);
-
   // Twitch chat, read-only and anonymous. It only draws messages here: chat never reaches the AI.
   const MAX_MESSAGES = 40;
-  const chatBox = document.getElementById("chat");
-  let chatChannel = "", chatSocket = null;
+  const chatBox = document.getElementById("chat"), team = document.getElementById("team");
+  let chatChannel = "", chatSocket = null, shownTeam = null;
 
   function parseIrc(raw) {
     const tags = {};
@@ -128,14 +115,31 @@
     socket.onclose = () => { if (socket === chatSocket) setTimeout(connectChat, 5000); };
   }
 
+  function hpColor(f) { return f > 0.5 ? "var(--hp-good)" : f > 0.2 ? "var(--hp-mid)" : "var(--hp-low)"; }
+
+  function renderTeam(party) {
+    if (!party.length) {
+      const empty = document.createElement("div");
+      empty.className = "empty"; empty.textContent = "No team yet";
+      team.replaceChildren(empty);
+      return;
+    }
+    team.replaceChildren(...party.slice(0, 6).map(m => {
+      const f = m.max_hp ? m.hp / m.max_hp : 0;
+      const row = document.createElement("div"); row.className = "mon";
+      row.innerHTML = '<span class="name"></span><span class="lv"></span><div class="hp"><div></div></div>';
+      row.querySelector(".name").textContent = m.name;
+      row.querySelector(".lv").textContent = "Lv " + m.level + (m.status ? " · " + m.status : "");
+      const hp = row.querySelector(".hp > div"); hp.style.width = (f * 100) + "%"; hp.style.background = hpColor(f);
+      return row;
+    }));
+  }
+
   async function refresh() {
     try {
       const s = await (await fetch("/state.json", { cache: "no-store" })).json();
-      target = s.say || "";
-      document.getElementById("thought").textContent = s.thought || "";
-      document.getElementById("goal").textContent = s.goal || "";
-      document.querySelector(".goal").style.display = s.goal ? "" : "none";   // only ever her own words
-      document.getElementById("mood").textContent = s.mood ? "feeling: " + s.mood : "";
+      const partyJson = JSON.stringify(s.party || []);
+      if (partyJson !== shownTeam) { shownTeam = partyJson; renderTeam(s.party || []); }
       if (s.twitch_channel && s.twitch_channel !== chatChannel) {
         chatChannel = s.twitch_channel;
         if (chatSocket) { const old = chatSocket; chatSocket = null; old.close(); }
