@@ -47,7 +47,8 @@ def main() -> int:
                         help="print the game state the bot can see, then exit (no AI needed)")
     parser.add_argument("--list-voices", action="store_true", help="show the voices you can use")
     parser.add_argument("--get-voice", metavar="NAME", help="download a free Piper voice and switch to it")
-    parser.add_argument("--test-voice", action="store_true", help="say a test line with your current voice settings")
+    parser.add_argument("--test-voice", nargs="?", const="", metavar="NAME",
+                        help="hear a test line: your current voice, or preview a Piper voice by name (e.g. amy)")
     args = parser.parse_args()
 
     if args.list_voices:
@@ -60,10 +61,18 @@ def main() -> int:
     from .config import load_config
     cfg = load_config(args.config)
 
-    if args.test_voice:
+    if args.test_voice is not None:
         from .narrator import Narrator
         v = cfg.voice
-        n = Narrator(v.engine, v.piper_model, v.rate, gender=v.gender, volume=v.volume,
+        engine, model = v.engine, v.piper_model
+        if args.test_voice:                      # preview a specific Piper voice without switching
+            from .voices import download_voice
+            path = download_voice(args.test_voice)
+            if path is None:
+                return 1
+            engine, model = "piper", path.as_posix()
+            print(f"Previewing '{args.test_voice}'. To keep it:  python -m pokeplay --get-voice {args.test_voice}")
+        n = Narrator(engine, model, v.rate, gender=v.gender, volume=v.volume,
                      voice_name=v.voice_name, piper_exe=v.piper_exe)
         n.say("Hi! This is what I sound like. Is this too loud, or just right?")
         time.sleep(0.5)

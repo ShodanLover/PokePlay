@@ -96,12 +96,13 @@ def set_config_values(path: str, section: str, values: dict) -> None:
     p.write_text(text, encoding="utf-8")
 
 
-def get_voice(name: str, config_path: str = "config.toml") -> int:
+def download_voice(name: str) -> Path | None:
+    """Make sure a Piper voice (and the Piper program) is on disk. Returns the model path."""
     name = name.lower()
     if name not in PIPER_VOICES:
         print(f"Unknown voice '{name}'. Choose one of: {', '.join(PIPER_VOICES)}")
-        return 1
-    folder, stem, desc = PIPER_VOICES[name]
+        return None
+    folder, stem, _desc = PIPER_VOICES[name]
     os.makedirs("voices", exist_ok=True)
     model = Path("voices") / f"{stem}.onnx"
     try:
@@ -113,7 +114,15 @@ def get_voice(name: str, config_path: str = "config.toml") -> int:
         ensure_piper_exe()
     except OSError as e:
         print(f"Download failed: {e}")
+        return None
+    return model
+
+
+def get_voice(name: str, config_path: str = "config.toml") -> int:
+    model = download_voice(name)
+    if model is None:
         return 1
+    desc = PIPER_VOICES[name.lower()][2]
     set_config_values(config_path, "voice", {"engine": "piper", "piper_model": model.as_posix()})
     print(f"Done! She now uses the '{name}' voice ({desc}). Restart PokePlay to hear it.")
     return 0
