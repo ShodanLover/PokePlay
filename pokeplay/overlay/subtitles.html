@@ -4,34 +4,45 @@
 <meta charset="utf-8">
 <title>PokePlay Subtitles</title>
 <style>
-  /* OBS Browser Source: http://127.0.0.1:8765/subtitles  (1920 x 1080, sits on top of everything) */
-  :root { --text: #ffffff; --outline: #000000; --name: #ffcb3d; --box: rgba(0, 0, 0, 0.55); }
+  /* OBS Browser Source: http://127.0.0.1:8765/subtitles  (1920 x 1080, just below the Avatar in the Sources list).
+     A bar along the bottom that stops before her avatar's corner, so nothing overlaps. */
+  :root { --bg: #0e121c; --text: #f2f4f8; --accent: #ffcb3d; }
   html, body { margin: 0; background: transparent; overflow: hidden; }
-  .bar { position: absolute; left: 50%; bottom: 48px; transform: translateX(-50%);
-    max-width: 1500px; width: max-content; padding: 14px 28px; border-radius: 12px; background: var(--box);
-    font-family: "Segoe UI", system-ui, sans-serif; font-size: 42px; font-weight: 700; line-height: 1.25;
-    color: var(--text); text-align: center;
-    text-shadow: -2px -2px 0 var(--outline), 2px -2px 0 var(--outline), -2px 2px 0 var(--outline), 2px 2px 0 var(--outline);
-    opacity: 0; transition: opacity .25s ease; }
-  .bar.on { opacity: 1; }
-  .name { color: var(--name); margin-right: 12px; }
+  .bar { position: absolute; left: 0; right: 320px; bottom: 0; height: 150px; box-sizing: border-box;
+    padding: 0 40px 0 48px; display: flex; align-items: center; gap: 32px;
+    background: var(--bg); border-top: 3px solid var(--accent);
+    font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); }
+  .name { flex: none; font-size: 28px; font-weight: 700; color: var(--accent); }
+  .line { flex: 1; min-width: 0; max-height: 122px; overflow: hidden; font-size: 38px; font-weight: 600; line-height: 1.25;
+    opacity: 0; transition: opacity .2s ease; }
+  .line.on { opacity: 1; }
 </style>
 </head>
 <body>
-<div class="bar" id="bar"><span class="name" id="name"></span><span id="line"></span></div>
+<div class="bar"><span class="name" id="name"></span><div class="line" id="line"></div></div>
 <script>
+  const MAX_FONT = 38, MIN_FONT = 24, MAX_HEIGHT = 122;
+  const line = document.getElementById("line"), nameEl = document.getElementById("name");
   let current = "";
+
+  function fit() {                  // long lines shrink to stay inside the bar
+    let size = MAX_FONT;
+    line.style.fontSize = size + "px";
+    while (line.scrollHeight > MAX_HEIGHT && size > MIN_FONT) {
+      size -= 2;
+      line.style.fontSize = size + "px";
+    }
+  }
+
   async function refresh() {
     try {
       const s = await (await fetch("/state.json", { cache: "no-store" })).json();
+      nameEl.textContent = s.streamer || "";
       const text = s.subtitle || "";
       if (text !== current) {
         current = text;
-        if (text) {
-          document.getElementById("name").textContent = s.streamer ? s.streamer + ":" : "";
-          document.getElementById("line").textContent = text;
-        }
-        document.getElementById("bar").classList.toggle("on", !!text);
+        if (text) { line.textContent = text; fit(); }
+        line.classList.toggle("on", !!text);
       }
     } catch (e) { /* agent not running */ }
   }

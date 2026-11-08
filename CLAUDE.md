@@ -22,7 +22,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   safety: family-friendly, Twitch guidelines, no hate or harassment.
 - **She names herself when she makes her character.** The name she types on the game's player naming
   screen becomes her name (`persona.json`, not in git), replacing the one she invented on first launch
-  (currently **PikaPunch**). Only a new game reaches that screen. `streamer_name` in `config.toml` must stay
+  (she's currently **Ziggy**). Only a new game reaches that screen. `streamer_name` in `config.toml` must stay
   empty, or it overrides her choice. New self-chosen names are blocked if they're Pokémon-derived.
 - **Personality:** offbeat, dry humor, gets a little unhinged when things go wrong, but **not cringe**.
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
@@ -66,8 +66,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   2. **Subtitles**: Browser, `http://127.0.0.1:8765/subtitles`, 1920x1080
   3. **Info Panel**: Browser, `http://127.0.0.1:8765`, 1920x1080
   4. **Game**: Window Capture of mGBA, Capture Method "Windows 10 (1903 and up)" if it's black,
-     Scale Filtering → Point, large on the left (the info panel occupies the right ~600 px; the avatar sits
-     bottom-right; subtitles are bottom-center).
+     Scale Filtering → Point. Set mGBA to View → Frame size → 5x and place the game 1200x800 at (68, 65), so
+     pixels stay sharp. The info panel occupies the right ~600 px; the subtitle bar is the bottom 150 px, ending
+     320 px from the right edge; the avatar sits in that bottom-right corner. **Nothing on stream may overlap.**
 - The browser sources only show content while the bot is running (its overlay server is on port 8765).
   Right-click → Refresh if one is blank.
 - Audio: Desktop Audio captures everything. Volume mixer: mGBA ~25-35%, Python (Kokoro voice) 100%.
