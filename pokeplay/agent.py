@@ -411,17 +411,30 @@ class Agent:
             ("Things you've noticed in past battles:\n" + "\n".join(f"- {l}" for l in lessons)) if lessons
             else "You haven't learned anything about how battles work yet.",
         ]
-        return self._memory_text(short=True) + "\n\n" + "\n".join(p for p in parts if p)
+        return "\n".join(p for p in parts if p)      # only the battle: her notes and goal just distract her here
 
     def _choose_battle_action(self, info: BattleInfo, labels: list[str], choices: list[Choice]) -> int:
         context = self._battle_context(info)
         self._context = context
         self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
-        d = self.brain.decide(context, labels)
-        self._apply_decision(d, labels[d.choice])
-        self.history.append(f"In battle: {labels[d.choice]}")
-        return d.choice
+        shown = self._usable_battle_labels(labels)
+        d = self.brain.decide(context, [labels[i] for i in shown])
+        chosen = shown[d.choice]
+        self._apply_decision(d, labels[chosen])
+        self.history.append(f"In battle: {labels[chosen]}")
+        return chosen
+
+    def _usable_battle_labels(self, labels: list[str]) -> list[int]:
+        """Positions of the battle choices worth offering: an empty bag has nothing to use."""
+        everything = list(range(len(labels)))
+        try:
+            s = self.game.state()
+        except Exception:  # noqa: BLE001 - never let this get in the way of a battle
+            return everything
+        if s.items or s.balls:
+            return everything
+        return [i for i in everything if "your Bag" not in labels[i]] or everything
 
     def _choose_next_pokemon(self, alive: list[tuple[int, Mon]]) -> int:
         labels = [f"Send out {m.summary()}" for _, m in alive]

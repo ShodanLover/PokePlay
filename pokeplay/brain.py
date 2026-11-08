@@ -44,7 +44,8 @@ GAME_SENSE = (
 )
 
 # A journal is for what actually happened. Saved guesses get re-read as facts, and she talks herself in circles.
-GUESSWORK = re.compile(r"\b(?:might|maybe|could|perhaps|probably|possibly|not sure|i think|seems?)\b|\breset|\bglitch|\bconfus|\bon screen\b|\bscreen says\b",
+GUESSWORK = re.compile(r"\b(?:might|maybe|could|perhaps|probably|possibly|not sure|i think|seems?)\b|\breset|\bglitch|\bconfus|\bon screen\b|\bscreen says\b"
+                       r"|\bhp\b|\d+\s*/\s*\d+",        # numbers go out of date, and she trusts them over the real ones
                        re.I)
 
 

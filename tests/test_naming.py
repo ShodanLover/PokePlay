@@ -574,6 +574,35 @@ def test_badly_hurt_team_is_noticed():
     assert not Agent._team_badly_hurt(NS(party=[]))
 
 
+def test_battle_context_is_only_the_battle(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.goal = "Find the door to Route 1"
+    agent.memory.journal.append("The north door is risky.")
+    foe = NS(species_name="PIDGEY", level=3, hp=10, max_hp=12, status="")
+    me = NS(species_name="BULBASAUR", moves=[], summary=lambda: "Sprout Lv8 HP 20/26")
+    context = agent._battle_context(NS(player=me, enemy=foe, is_trainer=False, message=""))
+    assert "HP 20/26" in context and "door" not in context.lower() and "Route 1" not in context
+
+
+def test_empty_bag_is_not_offered_in_battle(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    labels = ["Use TACKLE", "Open your Bag (items, Poké Balls)", "Run away"]
+    agent.game.state = lambda: NS(items=[], balls=[])
+    assert agent._usable_battle_labels(labels) == [0, 2]
+    agent.game.state = lambda: NS(items=[("Potion", 1)], balls=[])
+    assert agent._usable_battle_labels(labels) == [0, 1, 2]
+
+
+def test_hp_numbers_stay_out_of_her_journal(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    assert not agent._worth_noting("Sprout is at 3/24 and needs help.")
+    assert not agent._worth_noting("Sprout's HP is really low.")
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 
