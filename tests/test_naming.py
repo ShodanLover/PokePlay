@@ -510,7 +510,7 @@ def test_hints_follow_her_progress():
     assert h.hint_for(0, True, [], ["Viridian Forest"], True) == h.THROUGH_FOREST
     assert h.hint_for(0, True, [], ["Pewter City"], True) == h.BROCK
     assert h.hint_for(1, True, [], ["Pewter City"], True) == h.TO_ROUTE_3
-    assert h.hint_for(1, True, [], ["Mt. Moon - 1F"], True) == h.THROUGH_MT_MOON
+    assert h.hint_for(1, True, [], ["Mt Moon - 1F"], True) == h.THROUGH_MT_MOON
     assert h.hint_for(1, True, [], ["Cerulean City"], True) == h.MISTY
     assert h.hint_for(8, True, [], [], True) == h.BY_BADGES[8] and h.hint_for(99, True, [], [], True) == h.BY_BADGES[8]
 

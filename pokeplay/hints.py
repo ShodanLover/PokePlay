@@ -43,7 +43,7 @@ def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str
     if badges == 1:
         if been("Cerulean City"):
             return MISTY
-        return THROUGH_MT_MOON if been("Mt. Moon") else TO_ROUTE_3
+        return THROUGH_MT_MOON if been("Mt Moon") else TO_ROUTE_3
     if been("Pewter City"):
         return BROCK
     if been("Viridian Forest"):
