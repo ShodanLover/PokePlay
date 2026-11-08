@@ -90,7 +90,8 @@ DEFAULT_STYLE = (
     "things like 'I'm so chaotic' or 'chaos mode'), don't narrate your own actions in asterisks, don't "
     "overuse exclamation marks or the word 'chat', and don't force catchphrases. Never say 'ugh', 'chaos' "
     "or 'chaotic'. Be more unhinged than a normal streamer: sudden strange tangents, mock-dramatic overreactions, "
-    "talking to objects as if they're people. You're also a bit of a flirt, but only with inanimate things like "
+    "talking to objects as if they're people. You're in a messy, dramatic, on-again-off-again romance with doors, "
+    "and you bring up the drama. You're also a shameless flirt, but only with inanimate things like "
     "doors, signs, shop shelves and items, in a silly, PG way. Never flirt with any person or creature in the game, "
     "and never say anything sexual."
 )
@@ -136,10 +137,16 @@ COMEDY_ANGLES = [
     "a jealous lover accusing a door of seeing other people", "a wedding proposal to the nearest tree",
     "someone completely losing the plot, mid-sentence", "a prophet receiving visions from the grass",
     "someone arguing with the voices in their inventory", "a screaming sales pitch for doing absolutely nothing",
+    "a dramatic breakup speech to a door", "getting back together with a door you swore you were done with",
+    "bragging that a door texted you first", "a wild accusation that the grass knows what you did",
+    "a confession you were never supposed to say out loud", "a sudden, furious rant about something tiny",
+    "announcing your villain origin story, triggered by this",
     "a pirate who is new to the job", "an overly formal butler", "someone giving terrible life advice based on this",
 ]
 
-OBSESSION_CHANCE = 0.1     # how often a spoken comment includes her running bit (1 in 10)
+COMMENT_TEMPERATURE = 1.1   # wilder than her decisions, which stay at the normal setting
+
+OBSESSION_CHANCE = 0.1    # how often a spoken comment includes her running bit (1 in 10)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
 NEWS_CHANCE = 0.1           # how often a spoken comment remarks on a real headline (1 in 10)
 
@@ -196,13 +203,14 @@ class Brain:
         self._send_think = True
 
     # ------------------------------------------------------------------ transport
-    def _chat(self, messages: list[dict], fmt=None, max_tokens: int = 300) -> str:
+    def _chat(self, messages: list[dict], fmt=None, max_tokens: int = 300, temperature: float | None = None) -> str:
         body = {
             "model": self.model,
             "messages": messages,
             "stream": False,
             "keep_alive": "60m",
-            "options": {"temperature": self.temperature, "num_ctx": self.context_tokens,
+            "options": {"temperature": self.temperature if temperature is None else temperature,
+                        "num_ctx": self.context_tokens,
                         "num_predict": max_tokens},
         }
         if fmt is not None:
@@ -218,7 +226,7 @@ class Brain:
             detail = e.read().decode(errors="replace")
             if self._send_think and "think" in detail.lower():
                 self._send_think = False
-                return self._chat(messages, fmt, max_tokens)
+                return self._chat(messages, fmt, max_tokens, temperature)
             raise RuntimeError(f"Ollama error {e.code}: {detail}") from e
         except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
             raise BrainOffline(f"Ollama unreachable: {e}") from e
@@ -460,7 +468,7 @@ class Brain:
         schema = {"type": "object", "properties": {"say": {"type": "string"}}, "required": ["say"]}
         try:
             # Structured output: as plain text, small models sometimes "think" their instructions aloud.
-            data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
+            data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120, temperature=COMMENT_TEMPERATURE)))
         except Exception as e:  # noqa: BLE001
             print(f"[brain] comment failed: {e}")
             return ""
