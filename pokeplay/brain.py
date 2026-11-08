@@ -115,7 +115,7 @@ def _opening(text: str) -> tuple[str, ...]:
     return first if len(first) == 2 and not set(first) & COMMON_WORDS else ()
 
 
-OBSESSION_CHANCE = 0.15     # how often a spoken comment includes her running bit
+OBSESSION_CHANCE = 0.05     # how often a spoken comment includes her running bit (1 in 20)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
 
 # Words she leaned on until they got old. Lines using them are thought, not said.
