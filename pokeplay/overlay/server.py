@@ -14,7 +14,7 @@ SUBTITLES_PATH = Path(__file__).with_name("subtitles.html")
 class OverlayState:
     def __init__(self):
         self._lock = threading.Lock()
-        self._data: dict = {"say": "", "thought": "", "objective": "", "location": "", "badges": 0,
+        self._data: dict = {"say": "", "thought": "", "goal": "", "mood": "", "stats": {}, "location": "", "badges": 0,
                             "money": 0, "party": [], "log": [], "mode": "", "action": "",
                             "subtitle": "", "streamer": ""}
 

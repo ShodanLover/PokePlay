@@ -4,7 +4,39 @@
 from __future__ import annotations
 
 import argparse
+import datetime
+import os
 import sys
+
+
+class _Tee:
+    """Copy everything printed to a log file, so you can see what happened while you were away."""
+
+    def __init__(self, stream, path):
+        self.stream = stream
+        self.file = open(path, "a", encoding="utf-8", buffering=1)
+
+    def write(self, text):
+        try:
+            self.stream.write(text)
+        except UnicodeEncodeError:
+            self.stream.write(text.encode("ascii", "replace").decode())
+        if text.strip():
+            stamp = datetime.datetime.now().strftime("%H:%M:%S")
+            text = "".join(f"[{stamp}] {line}" if line.strip() else line for line in text.splitlines(True))
+        self.file.write(text)
+
+    def flush(self):
+        self.stream.flush()
+        self.file.flush()
+
+
+def _keep_awake() -> None:
+    """Stop Windows from sleeping while she plays."""
+    if sys.platform == "win32":
+        import ctypes
+        ES_CONTINUOUS, ES_SYSTEM_REQUIRED, ES_DISPLAY_REQUIRED = 0x80000000, 0x00000001, 0x00000002
+        ctypes.windll.kernel32.SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)
 
 
 def main() -> int:
@@ -20,6 +52,12 @@ def main() -> int:
     if args.inspect:
         from .inspect_state import inspect
         return inspect(cfg)
+
+    os.makedirs("logs", exist_ok=True)
+    log_path = os.path.join("logs", f"pokeplay-{datetime.date.today()}.log")
+    sys.stdout = _Tee(sys.stdout, log_path)
+    sys.stderr = _Tee(sys.stderr, log_path)
+    _keep_awake()
 
     from .agent import Agent
     agent = Agent(cfg)

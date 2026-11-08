@@ -1,6 +1,6 @@
 import struct
 
-from pokeplay.battle import best_move
+from pokeplay.battle import hp_bar
 from pokeplay.game import SUBSTRUCT_ORDER, Game, MapGrid, Mon
 from pokeplay.pathfinding import find_path, reachable
 from pokeplay.text import decode, encode_simple
@@ -91,24 +91,15 @@ def test_decode_mon_rejects_bad_checksum():
     assert g.decode_mon(bytes(raw)) is None
 
 
-def test_best_move_prefers_super_effective():
+def test_hp_bar_hides_exact_numbers():
     g = make_game()
-    me = Mon(25, "PIKACHU", "PIKA", 10, 30, 30, "", (13, 13),
-             [g.make_move(33, 35), g.make_move(84, 30), g.make_move(45, 40)], 20, 20, 20, 20, 20)
-    water_foe = Mon(7, "SQUIRTLE", "SQUIRTLE", 10, 30, 30, "", (11, 11), [], 20, 20, 20, 20, 20)
-    ground_foe = Mon(50, "DIGLETT", "DIGLETT", 10, 30, 30, "", (4, 4), [], 20, 20, 20, 20, 20)
-    idx, move, _ = best_move(g, me, water_foe)
-    assert move.id == 84  # Thundershock vs Water
-    idx, move, _ = best_move(g, me, ground_foe)
-    assert move.id == 33  # Electric does nothing to Ground; use Tackle
-
-
-def test_best_move_skips_empty_pp():
-    g = make_game()
-    me = Mon(25, "PIKACHU", "PIKA", 10, 30, 30, "", (13, 13),
-             [g.make_move(33, 35), g.make_move(84, 0)], 20, 20, 20, 20, 20)
-    foe = Mon(7, "SQUIRTLE", "SQUIRTLE", 10, 30, 30, "", (11, 11), [], 20, 20, 20, 20, 20)
-    assert best_move(g, me, foe)[1].id == 33
+    foe = Mon(7, "SQUIRTLE", "SQUIRTLE", 10, 9, 30, "", (11, 11), [], 20, 20, 20, 20, 20)
+    assert hp_bar(foe) == "about half" or hp_bar(foe) == "low"
+    foe.hp = 30
+    assert hp_bar(foe) == "nearly full"
+    foe.hp = 0
+    assert hp_bar(foe) == "empty"
+    assert g.effectiveness(13, (4, 4)) == 0.0
 
 
 def grid_from(rows):

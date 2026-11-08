@@ -10,17 +10,35 @@ from . import addresses as A
 from .emulator import Emulator
 from .game import (ARROW_WARPS, BEHAVIOR_COUNTER, BEHAVIOR_TALL_GRASS, Game, GameState,
                    MapGrid, NPC)
+from .memory import Memory
 from .pathfinding import STEPS, find_path, reachable, walkable
 
 OPPOSITE = {"up": "down", "down": "up", "left": "right", "right": "left"}
 TEMP_BLOCK_SECONDS = 45
 
 
+def relative(x: int, y: int, tx: int, ty: int) -> str:
+    """'3 steps up and 2 to the left' instead of coordinates."""
+    dx, dy = tx - x, ty - y
+    parts = []
+    if dy:
+        parts.append(f"{abs(dy)} {'step' if abs(dy) == 1 else 'steps'} {'up' if dy < 0 else 'down'}")
+    if dx:
+        parts.append(f"{abs(dx)} {'step' if abs(dx) == 1 else 'steps'} to the {'left' if dx < 0 else 'right'}")
+    return " and ".join(parts) if parts else "right where you're standing"
+
+
+def region(x: int, y: int, w: int, h: int) -> str:
+    ns = "north" if y < h / 3 else "south" if y > 2 * h / 3 else ""
+    ew = "west" if x < w / 3 else "east" if x > 2 * w / 3 else ""
+    return (ns + ew) or "middle"
+
+
 @dataclass
 class Option:
     kind: str                 # warp | exit | talk | explore | train
     label: str
-    key: str                  # stable id used to count how often it was picked
+    key: str                  # stable id used to count how often it was picked / remember where it leads
     target: tuple[int, int] | None = None
     direction: str = ""
     npc: NPC | None = None
@@ -37,6 +55,8 @@ class Result:
 class Overworld:
     emu: Emulator
     game: Game
+    memory: Memory | None = None
+    steps_taken: int = 0
     temp_blocks: dict[tuple[int, int, int, int], float] = field(default_factory=dict)
     visited: dict[tuple[int, int], set[tuple[int, int]]] = field(default_factory=dict)
 
@@ -84,10 +104,11 @@ class Overworld:
             if dest in seen_dest and w.dest_group != 0x7F:
                 continue
             seen_dest.add(dest)
-            name = w.dest_name if w.dest_group != 0x7F else "the previous area"
-            options.append(Option("warp", f"Go through the doorway/stairs at ({w.x},{w.y}) to {name}",
-                                  f"warp:{s.map_group}.{s.map_num}:{w.x},{w.y}", (w.x, w.y),
-                                  distance=len(path)))
+            key = f"{s.map_group}.{s.map_num}|door@{w.x},{w.y}"
+            known = self.memory.links.get(key) if self.memory else None
+            where = f"leads to {known}" if known else "you haven't been through it yet"
+            options.append(Option("warp", f"Go through the doorway/stairs {relative(s.x, s.y, w.x, w.y)} ({where})",
+                                  key, (w.x, w.y), distance=len(path)))
 
         # Walking off the edge of the map into a connected area.
         for c in self.game.connections():
@@ -96,8 +117,10 @@ class Overworld:
             if not reach:
                 continue
             best = min(reach, key=lambda t: dist[t])
-            options.append(Option("exit", f"Walk off the {c.direction} edge of the map to {c.dest_name}",
-                                  f"exit:{s.map_group}.{s.map_num}:{c.direction}", best,
+            key = f"{s.map_group}.{s.map_num}|edge:{c.direction}"
+            known = self.memory.links.get(key) if self.memory else None
+            where = f"leads to {known}" if known else "you haven't been that way yet"
+            options.append(Option("exit", f"Leave this area by the {c.direction} side ({where})", key, best,
                                   direction={"north": "up", "south": "down", "west": "left", "east": "right"}[c.direction],
                                   distance=dist[best]))
 
@@ -108,17 +131,18 @@ class Overworld:
             if not reach:
                 continue
             best = min(reach, key=lambda t: dist[t])
-            who = "trainer" if n.is_trainer else "person/object"
-            options.append(Option("talk", f"Talk to the {who} at ({n.x},{n.y})",
-                                  f"talk:{s.map_group}.{s.map_num}:{n.local_id}", best, npc=n,
-                                  distance=dist[best]))
+            key = f"{s.map_group}.{s.map_num}|{n.local_id}"
+            said = self.memory.people.get(key) if self.memory else None
+            extra = f' (you talked before; they said: "{said[:90]}")' if said else ""
+            options.append(Option("talk", f"Talk to / check the person or thing {relative(s.x, s.y, n.x, n.y)}{extra}",
+                                  key, best, npc=n, distance=dist[best]))
 
         # Tall grass for training.
         grass = [t for t in dist if grid.behavior[t[1]][t[0]] == BEHAVIOR_TALL_GRASS]
         if grass and s.party:
             g = min(grass, key=lambda t: dist[t])
-            options.append(Option("train", "Train: walk around in the tall grass to fight wild Pokémon",
-                                  f"train:{s.map_group}.{s.map_num}", g, distance=dist[g]))
+            options.append(Option("train", f"Walk around in the tall grass {relative(s.x, s.y, g[0], g[1])}",
+                                  f"grass:{s.map_group}.{s.map_num}", g, distance=dist[g]))
 
         # Explore the least-visited reachable spot.
         visited = self.visited.get(self._map_key(s), set())
@@ -130,7 +154,7 @@ class Overworld:
             candidates = random.sample(list(dist), min(200, len(dist)))
             far = max(candidates, key=novelty)
             if novelty(far) >= 3:
-                options.append(Option("explore", f"Explore unvisited ground around ({far[0]},{far[1]})",
+                options.append(Option("explore", f"Explore the {region(far[0], far[1], grid.width, grid.height)} part of this area, where you haven't walked yet",
                                       f"explore:{s.map_group}.{s.map_num}", far, distance=dist[far]))
         return options, grid
 
@@ -169,6 +193,7 @@ class Overworld:
             if after[0] != "overworld" or after[1:3] != before[1:3]:
                 return "changed"
             if after[3:5] != before[3:5]:
+                self.steps_taken += 1
                 return "moved"
         return "blocked"
 

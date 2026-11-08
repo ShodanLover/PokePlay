@@ -86,11 +86,19 @@ def test_full_state():
 def test_options():
     g = build_world()
     s = g.state()
-    world = Overworld(g.emu, g)
+    from pokeplay.memory import Memory
+    world = Overworld(g.emu, g, Memory(path="unused.json"))
     options, grid = world.build_options(s)
     kinds = {o.kind: o for o in options}
     assert grid.width == W and grid.height == H
-    assert "Professor Oak's Lab" in kinds["warp"].label and kinds["warp"].target == (1, 0)
+    # First-timer mode: she doesn't know where the door goes until she's been through it.
+    assert "Professor Oak" not in kinds["warp"].label and "haven't been through" in kinds["warp"].label
+    assert kinds["warp"].target == (1, 0) and "(" not in kinds["warp"].label.split("stairs")[1][:3]
+    assert "3 steps up" in kinds["warp"].label
+    world.memory.links[kinds["warp"].key] = "Professor Oak's Lab"
+    options2, _ = world.build_options(s)
+    assert any("leads to Professor Oak's Lab" in o.label for o in options2)
+    assert "trainer" not in kinds["talk"].label
     assert kinds["exit"].direction == "down" and kinds["exit"].target[1] == H - 1
     assert kinds["talk"].npc.local_id == 5
     assert kinds["train"].target == (4, 4)

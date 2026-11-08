@@ -93,6 +93,7 @@ def test_persona_created_once(tmp_path, monkeypatch):
     cfg = Config()
     cfg.voice.engine = "none"
     cfg.brain.persona_file = str(tmp_path / "persona.json")
+    cfg.brain.memory_file = str(tmp_path / "memory.json")
     agent = Agent(cfg)
     calls = []
 
@@ -103,7 +104,7 @@ def test_persona_created_once(tmp_path, monkeypatch):
     monkeypatch.setattr(agent.brain, "create_persona", fake_create)
     agent._load_persona()
     agent._load_persona()
-    assert calls == ["a female AI"]                     # only invented once
+    assert calls == [cfg.brain.persona_hint]            # only invented once
     assert agent.brain.name == "Nova"
     assert json.loads((tmp_path / "persona.json").read_text())["name"] == "Nova"
     assert "Onward" in agent.brain.personality

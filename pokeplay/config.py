@@ -19,10 +19,12 @@ class EmulatorConfig:
 class BrainConfig:
     ollama_url: str = "http://127.0.0.1:11434"
     model: str = "qwen3:4b"
-    temperature: float = 0.7
+    temperature: float = 0.85
     context_tokens: int = 4096
     streamer_name: str = ""     # leave empty: the AI picks its own name on first launch
-    persona_hint: str = "a female AI"   # the only thing decided for her; she invents the rest
+    # The only thing decided for her; she invents the rest of herself.
+    persona_hint: str = "a female AI with a chaotic, slightly unhinged, dramatic personality"
+    memory_file: str = "memory.json"
     persona_file: str = "persona.json"
 
 

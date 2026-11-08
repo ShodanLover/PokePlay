@@ -25,7 +25,11 @@
     vertical-align: -0.15em; animation: blink 1s steps(1) infinite; }
   @keyframes blink { 50% { opacity: 0; } }
   #thought { font-size: 19px; color: #cfd5e2; font-style: italic; margin-top: 10px; }
-  #objective { font-size: 18px; line-height: 1.35; }
+  #goal { font-size: 18px; line-height: 1.35; }
+  .mood { float: right; color: var(--accent); text-transform: none; letter-spacing: 0; font-size: 15px; }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 12px; }
+  .stats div { font-size: 13px; color: var(--muted); }
+  .stats b { display: block; font-size: 22px; color: var(--text); font-variant-numeric: tabular-nums; }
   .row { display: flex; gap: 18px; font-size: 18px; }
   .row b { color: var(--accent); }
   .mon { display: grid; grid-template-columns: 1fr 120px; gap: 2px 12px; margin: 8px 0; font-size: 18px; }
@@ -45,8 +49,8 @@
     <div id="thought"></div>
   </div>
   <div class="card">
-    <div class="label">Current goal</div>
-    <div id="objective"></div>
+    <div class="label">Her goal <span id="mood" class="mood"></span></div>
+    <div id="goal">Figuring out what this game even is</div>
   </div>
   <div class="card">
     <div class="row"><span>📍 <b id="location"></b></span></div>
@@ -55,6 +59,10 @@
   <div class="card">
     <div class="label">Team</div>
     <div id="party"></div>
+  </div>
+  <div class="card">
+    <div class="label">The run so far</div>
+    <div class="stats" id="stats"></div>
   </div>
   <div class="card">
     <div class="label">Recent</div>
@@ -80,7 +88,16 @@
       const s = await (await fetch("/state.json", { cache: "no-store" })).json();
       target = s.say || "";
       document.getElementById("thought").textContent = s.thought || "";
-      document.getElementById("objective").textContent = s.objective || "";
+      if (s.goal) document.getElementById("goal").textContent = s.goal;
+      document.getElementById("mood").textContent = s.mood ? "feeling: " + s.mood : "";
+      const st = s.stats || {};
+      const cells = [["Day", st.day], ["Hours", st.hours], ["Steps", st.steps], ["Places", st.places],
+                     ["Battles", st.battles], ["Won", st.won], ["Lost", st.lost], ["Faints", st.fainted]];
+      document.getElementById("stats").replaceChildren(...cells.map(([k, v]) => {
+        const d = document.createElement("div");
+        const b = document.createElement("b"); b.textContent = (v ?? 0).toLocaleString();
+        d.append(b, k); return d;
+      }));
       document.getElementById("location").textContent = s.location || "";
       document.getElementById("badges").textContent = s.badges ?? 0;
       document.getElementById("money").textContent = "₽" + (s.money ?? 0).toLocaleString();

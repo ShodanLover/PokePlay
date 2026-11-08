@@ -17,3 +17,7 @@ __pycache__/
 .venv/
 venv/
 .pytest_cache/
+logs/
+memory.json.tmp
+persona.json
+memory.json

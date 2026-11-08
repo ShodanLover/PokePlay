@@ -11,12 +11,13 @@ ollama_url = "http://127.0.0.1:11434"
 # qwen3:4b fits easily on a 6 GB card (GTX 1660 / 1660 Ti) alongside OBS.
 # If you have more VRAM free, try "qwen3:8b" for smarter play.
 model = "qwen3:4b"
-temperature = 0.7
+temperature = 0.85       # higher = more chaotic and creative
 context_tokens = 4096
 # She chooses her own name and personality on first launch and saves them in persona.json.
 # Delete persona.json if you ever want her to reinvent herself.
 streamer_name = ""                  # leave empty to let her choose (recommended)
-persona_hint = "a female AI"        # the only thing decided for her
+persona_hint = "a female AI with a chaotic, slightly unhinged, dramatic personality"   # the only thing decided for her
+memory_file = "memory.json"         # everything she has learned (keep it safe!)
 persona_file = "persona.json"
 
 [voice]

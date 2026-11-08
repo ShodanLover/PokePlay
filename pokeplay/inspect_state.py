@@ -5,7 +5,6 @@ from __future__ import annotations
 from .config import Config
 from .emulator import Emulator
 from .game import Game
-from .objectives import current_objective
 from .overworld import Overworld
 
 
@@ -27,7 +26,6 @@ def inspect(cfg: Config) -> int:
         print("  ", m.summary(), "|", ", ".join(f"{mv.name} {mv.pp}pp" for mv in m.moves))
     print("Items:", s.items, "Balls:", s.balls, "Key items:", s.key_items)
     print("Last message:", s.message[:200])
-    print("\nObjective:", current_objective(game, s))
 
     if s.mode == "overworld":
         world = Overworld(emu, game)

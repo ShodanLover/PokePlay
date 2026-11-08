@@ -8,7 +8,7 @@ It runs **completely free** on your own PC: no paid AI services and no subscript
 ```
 ┌────────────┐  memory + buttons  ┌───────────────────┐  words  ┌────────────┐
 │ mGBA        │ ◀────────────────▶ │ PokePlay (Python) │ ──────▶ │ Voice (TTS) │──┐
-│ + Lua bridge│                    │  ├ autopilot      │         └────────────┘  │
+│ + Lua bridge│                    │  ├ game mechanics │         └────────────┘  │
 └────────────┘                     │  └ AI brain ◀──▶ Ollama (local AI model)    ▼
       │                            └───────────────────┘ ──▶ overlay page ──▶  OBS ──▶ Twitch
       └───────────────────────────── game window ─────────────────────────────▶
@@ -18,25 +18,29 @@ It runs **completely free** on your own PC: no paid AI services and no subscript
 
 - **mGBA** runs the game. A small Lua script (`lua/pokeplay_bridge.lua`) lets PokePlay read the
   game's memory and press buttons.
-- PokePlay **reads the game's memory directly**: map, position, walls, doors, NPCs, your team's HP and
-  moves, items, badges and story progress. Nothing is guessed from screenshots, so a small AI model
-  can play.
-- **The autopilot (plain code) does the hard parts:** walking, pathfinding around walls and ledges,
-  picking the strongest move in battle (using real type matchups), switching when a Pokémon faints,
-  and clicking through dialogue.
-- **The AI brain** is a free local model run by Ollama. In the overworld it chooses what to do next from
-  a list (*"Go through the door to Professor Oak's Lab"*, *"Talk to the person at (5,3)"*,
-  *"Train in the tall grass"*…) and says one line out loud explaining why. It also reacts to battles,
-  level-ups and evolutions.
-- **She is her own person.** On first launch she invents her streamer name, personality and
-  catchphrase (saved in `persona.json`). The only fixed instructions are safety rules: family-friendly,
-  within Twitch guidelines, no hate or harassment.
-- **Subtitles:** everything she says is shown word-for-word at the bottom of the stream. Twitch has no
-  automatic captions for live streams, but we already have her exact words: the AI produces the text
-  and the voice then reads it, so captions are free and always exact.
-- A built-in **walkthrough** works out the current goal from the game's story flags, so the AI always
-  knows what it's working toward.
-- An **overlay page** shows the AI's thoughts, goal, team HP bars and recent events, ready for OBS.
+- **She plays as a true first-timer.** The AI is told she has never seen Pokémon. She gets **no
+  walkthrough and no game knowledge**: doors and paths are unknown until she goes through them, people
+  are just "a person" until she talks to them, and in battle she sees only what the screen shows (move
+  names, types, PP, the opponent's HP bar). She learns matchups by noticing "It's super effective!".
+- **She makes every decision**: where to go, who to talk to, which move to use, when to run, who to send
+  out when a Pokémon faints, and what to name her character, her rival and her Pokémon.
+- **Code only does the mechanics**: walking a route once she has chosen where to go, working the menus
+  for the move she picked, and pressing A through text.
+- **She remembers.** `memory.json` holds her journal (written by her), things she has noticed, places
+  she has been, where doors lead, what people told her, her current goal, her mood and run stats. It
+  survives restarts, so a months-long run builds on itself. She condenses her own journal when it gets long.
+- **She is her own person.** On first launch she invents her name, personality and catchphrase
+  (`persona.json`). The only thing decided for her is "a female AI with a chaotic, slightly unhinged,
+  dramatic personality" (you can change `persona_hint` in `config.toml`). The only fixed rules are
+  safety rules: family-friendly, within Twitch guidelines, no hate or harassment.
+- **Subtitles:** everything she says is shown word-for-word. The AI writes her words and the voice
+  reads them, so captions are free and exact.
+- An **overlay** shows her thoughts, her own goal and mood, her team, recent events, and run stats
+  (day, hours, steps, places found, battles won and lost).
+
+**One honest limit:** the AI model learned from the internet, so somewhere inside it does know
+Pokémon. She's told to ignore that and only trust what she learns on stream, but a small model will
+occasionally "just know" something.
 
 The ROM's own data (Pokémon names, moves, type chart) is read from **your ROM** while it runs.
 No game data is stored in this repo.
@@ -118,8 +122,26 @@ everything is wired up correctly.
 python -m pokeplay
 ```
 
-You can also just double-click **`start.bat`**. The AI says hello and starts playing. Press **Ctrl+C** in the window to stop it.
-It also makes an mGBA save state in slot 9 every 10 minutes, as a backup.
+You can also just double-click **`start.bat`**. She says hello and starts playing. Press **Ctrl+C** in the window to stop her.
+
+### Leaving her running while you're away
+
+Use **`run_forever.bat`** instead of `start.bat`. It restarts her automatically if anything crashes.
+Also:
+- She keeps the PC awake while running, writes everything to `logs/`, and every 10 minutes saves
+  a backup save state (slot 9) plus her memory.
+- If Ollama hiccups, she waits and retries instead of acting randomly.
+- **Windows Update** can restart your PC overnight. Go to Settings → Windows Update and either pause
+  updates or set **Active hours** to cover when she streams.
+- In **OBS → Settings → Advanced**, make sure **Automatically Reconnect** is on. Twitch ends a single
+  broadcast after 48 hours; OBS reconnects and starts a new one.
+- Make Ollama and OBS start with Windows if you want her to survive a reboot.
+- **If mGBA itself crashes**, the bridge script has to be loaded again, and current mGBA releases (0.10)
+  can't do that automatically. The newer mGBA **development builds** (mgba.io → Downloads →
+  Development builds) have an **autorun scripts** option under Tools → Scripting. If you use one, add
+  `pokeplay_bridge.lua` there. mGBA crashes are rare; the Python side, which is more likely to hiccup,
+  restarts by itself.
+- **Back up `memory.json` and `persona.json`** now and then. They are her whole history.
 
 ### 7. Set up OBS for Twitch
 
@@ -173,10 +195,10 @@ piper_model = "voices/en_US-amy-medium.onnx"
 
 ## What it can and can't do yet (v0.1)
 
-**Works:** starting a new game, typing her own names, walking anywhere on a map, doors, stairs, map exits, ledges, talking to people (including across
-shop counters), training in tall grass, wild and trainer battles with smart move choice, switching
-when a Pokémon faints, running from bad wild battles, reading dialogue, story-aware goals for all 8 gyms,
-narration, and the overlay.
+**Works:** starting a new game, typing her own names, walking anywhere on a map, doors, stairs, map
+exits, ledges, talking to people (including across shop counters), walking in tall grass, choosing her
+own moves in battle, running away, choosing who to send out, learning matchups from battle messages,
+reading dialogue, setting her own goals, long-term memory, narration, subtitles, stats, and the overlay.
 
 **Not yet (planned):**
 - Using menus on purpose: healing items, catching Pokémon, teaching HMs (Cut/Surf/Strength), and
@@ -197,8 +219,8 @@ pokeplay/
   game.py                   reads party, map, NPCs, bag, battle state from memory
   pathfinding.py            BFS pathfinding (walls, ledges, water, NPCs)
   overworld.py              builds the action list and carries out actions
-  battle.py                 battle autopilot (move scoring with type matchups)
-  objectives.py             story-aware goals
+  battle.py                 battle menus; she picks, it presses; learns from battle messages
+  memory.py                 her long-term memory (journal, places, people, lessons, stats)
   brain.py                  local AI via Ollama: decisions + commentary
   narrator.py               text-to-speech (Windows voice or Piper)
   naming.py                 types names on the in-game keyboard

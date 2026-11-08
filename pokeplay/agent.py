@@ -1,4 +1,4 @@
-"""The main loop: watch the game, decide, act, narrate."""
+"""The main loop: watch the game, let her decide, act, and let her talk."""
 
 from __future__ import annotations
 
@@ -9,14 +9,14 @@ import threading
 import time
 
 from . import addresses as A
-from .battle import BattlePilot
-from .brain import Brain
+from .battle import BattlePilot, Choice, hp_bar
+from .brain import Brain, BrainOffline
 from .config import Config
 from .emulator import Emulator
-from .game import Game, GameState
+from .game import BattleInfo, Game, GameState, Mon
+from .memory import Memory
 from .naming import MAX_CHARS, NamingScreen
 from .narrator import Narrator
-from .objectives import current_objective
 from .overlay.server import OverlayState, start_overlay
 from .overworld import Overworld
 
@@ -24,6 +24,8 @@ KIND_ORDER = {"warp": 0, "exit": 1, "talk": 2, "train": 3, "explore": 4}
 BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported away",
                    6: "the wild Pokémon fled", 7: "caught it"}
 MAX_TALK_OPTIONS = 5
+REFLECT_EVERY = 12          # decisions between reflections
+JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 
 
 class Agent:
@@ -33,48 +35,71 @@ class Agent:
         self.game = Game(self.emu)
         self.brain = Brain(cfg.brain.ollama_url, cfg.brain.model, cfg.brain.streamer_name,
                            cfg.brain.temperature, cfg.brain.context_tokens)
+        self.memory = Memory.load(cfg.brain.memory_file)
         self.overlay = OverlayState()
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
                                  gender=cfg.voice.gender)
         self.naming = NamingScreen(self.emu)
-        self._named_this_screen = False
-        self.world = Overworld(self.emu, self.game)
-        self.pilot = BattlePilot(self.emu, self.game)
+        self.world = Overworld(self.emu, self.game, self.memory)
+        self.pilot = BattlePilot(self.emu, self.game, chooser=self._choose_battle_action,
+                                 party_chooser=self._choose_next_pokemon)
 
         self.history: collections.deque[str] = collections.deque(maxlen=10)
-        self.notes: collections.deque[str] = collections.deque(maxlen=8)
         self.pick_counts: collections.Counter[str] = collections.Counter()
         self._events: queue.Queue[str] = queue.Queue()
         self._context = ""
         self._last_message = ""
         self._dialog_presses = 0
+        self._dialog_lines: list[str] = []
+        self._talking_to: str | None = None
         self._other_loops = 0
         self._prev_mode = ""
         self._in_battle = False
+        self._named_this_screen = False
         self._party_before_battle: list = []
         self._last_autosave = time.time()
         self._last_overlay = 0.0
+        self._last_tick = time.time()
         self._last_map = None
+        self._decisions_since_reflect = 0
+        self._actions_since_discovery = 0
+        self._last_state: GameState | None = None
 
     # ------------------------------------------------------------------ startup
     def start(self) -> None:
         print("Connecting to mGBA...")
-        self.emu.connect()
+        self.emu.connect(retry_seconds=600)
         print(f"Found {self.game.check_rom()}")
         self.game.load_tables()
         print("Read species, move and item data from the ROM.")
-        self.brain.check()
-        print(f"Ollama model '{self.cfg.brain.model}' is ready.")
+        self._wait_for_brain(first=True)
         self._load_persona()
         start_overlay(self.overlay, self.cfg.overlay.port)
-        print(f"Overlay: http://127.0.0.1:{self.cfg.overlay.port}  (add it to OBS as a Browser Source)")
+        print(f"Overlay: http://127.0.0.1:{self.cfg.overlay.port}  Subtitles: http://127.0.0.1:{self.cfg.overlay.port}/subtitles")
+        self.memory.bump("sessions")
+        self.memory.save()
+        self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         if self.cfg.commentary.enabled:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
-        hello = self.brain.greet()
+        hello = self.brain.greet(self._memory_text())
         if hello:
             self.narrator.say(hello)
+
+    def _wait_for_brain(self, first: bool = False) -> None:
+        delay = 10
+        while True:
+            try:
+                self.brain.check()
+                if first:
+                    print(f"Ollama model '{self.cfg.brain.model}' is ready.")
+                return
+            except Exception as e:  # noqa: BLE001
+                print(f"[agent] AI not available ({e}); retrying in {delay}s")
+                self.overlay.update(thought="(my brain is rebooting... one sec)")
+                time.sleep(delay)
+                delay = min(delay * 2, 120)
 
     def _load_persona(self) -> None:
         """She picks her own name and personality the first time, then keeps them."""
@@ -102,6 +127,9 @@ class Agent:
                 self.tick()
             except KeyboardInterrupt:
                 raise
+            except BrainOffline as e:
+                print(f"[agent] {e}")
+                self._wait_for_brain()
             except Exception as e:  # noqa: BLE001 - keep the stream alive
                 print(f"[agent] error: {e!r}; retrying in 2s")
                 time.sleep(2)
@@ -109,7 +137,7 @@ class Agent:
                     self.emu.command("PING")
                 except Exception:  # noqa: BLE001
                     self.emu.close()
-                    self.emu.connect(retry_seconds=600)
+                    self.emu.connect(retry_seconds=3600)
 
     # ------------------------------------------------------------------ main tick
     def tick(self) -> None:
@@ -120,7 +148,7 @@ class Agent:
 
         if mode == "battle":
             self.pilot.step()
-            self._drain_pilot_events()
+            self._absorb_battle_lessons()
         elif mode == "party_menu":
             self.pilot.party_menu()
         elif mode == "dialog":
@@ -148,6 +176,8 @@ class Agent:
 
     def _periodic(self, mode: str) -> None:
         now = time.time()
+        self.memory.bump("play_seconds", min(now - self._last_tick, 60))
+        self._last_tick = now
         if now - self._last_overlay > 2:
             self._last_overlay = now
             try:
@@ -157,89 +187,77 @@ class Agent:
                     for m in party])
             except Exception:  # noqa: BLE001
                 pass
+            st = self.memory.stats
+            self.memory.stats["steps"] = st.get("steps", 0)
+            self.overlay.update(stats={
+                "day": self.memory.days_since_start(),
+                "hours": round(st.get("play_seconds", 0) / 3600, 1),
+                "steps": int(st.get("steps", 0)),
+                "battles": int(st.get("battles", 0)),
+                "won": int(st.get("battles_won", 0)),
+                "lost": int(st.get("battles_lost", 0)),
+                "fainted": int(st.get("pokemon_fainted", 0)),
+                "places": len(self.memory.places),
+            })
         minutes = self.cfg.emulator.autosave_minutes
         if minutes and mode == "overworld" and now - self._last_autosave > minutes * 60:
             self._last_autosave = now
             self.emu.save_state(self.cfg.emulator.autosave_slot)
-            print(f"[agent] saved state to slot {self.cfg.emulator.autosave_slot}")
+            self.memory.save()
+            print(f"[agent] backup saved (state slot {self.cfg.emulator.autosave_slot} + memory)")
 
     # ------------------------------------------------------------------ events
     def _on_mode_change(self, old: str, new: str) -> None:
+        if old == "dialog" and new != "dialog":
+            self._finish_conversation()
         if new == "battle" and not self._in_battle:
             self._in_battle = True
+            self.memory.bump("battles")
             self.pilot.reset()
             self._party_before_battle = self.game.party()
-            # Wait a moment for the battle data to be filled in.
-            self.emu.wait_frames(30)
+            self.emu.wait_frames(30)   # let the battle data fill in
             info = self.game.battle_info()
             foe = self.game.decode_mon(self.emu.read(A.gEnemyParty, 100)) or info.enemy
             if foe:
-                if info.is_trainer:
-                    self._event(f"A trainer battle started! The opponent leads with {foe.species_name} Lv{foe.level}.")
-                else:
-                    self._event(f"A wild {foe.species_name} Lv{foe.level} appeared!")
+                who = "Someone challenged you to a battle" if info.is_trainer else "A wild creature jumped out"
+                self._event(f"{who}! It's called {foe.species_name}, level {foe.level}.")
         elif self._in_battle and new not in ("battle", "party_menu"):
             self._in_battle = False
             outcome = BATTLE_OUTCOMES.get(self.emu.u8(A.gBattleOutcome), "")
+            if outcome == "won":
+                self.memory.bump("battles_won")
+            elif outcome == "lost":
+                self.memory.bump("battles_lost")
             after = self.game.party()
             lines = []
             for b, a in zip(self._party_before_battle, after):
                 if a.species != b.species and a.level >= b.level:
-                    lines.append(f"{b.nickname} evolved into {a.species_name}!")
+                    lines.append(f"{b.nickname} changed form and is now a {a.species_name}!")
                 elif a.level > b.level:
                     lines.append(f"{a.nickname} grew to level {a.level}!")
+                if a.fainted and not b.fainted:
+                    self.memory.bump("pokemon_fainted")
             if outcome:
                 self.history.append(f"Battle ended: {outcome}.")
-                lines.insert(0, f"The battle is over: we {outcome}." if outcome in ("won", "lost", "drew", "ran away")
+                lines.insert(0, f"The battle is over: you {outcome}." if outcome in ("won", "lost", "drew", "ran away")
                              else f"The battle is over: {outcome}.")
             if lines:
                 self._event(" ".join(lines))
-            self.overlay.log(lines[0] if lines else "Battle over")
+            self.memory.save()
+            self._decisions_since_reflect = REFLECT_EVERY   # reflect after each battle
 
     def _event(self, text: str) -> None:
         print(f"[event] {text}")
         self.overlay.log(text)
+        self.history.append(text)
         if self.cfg.commentary.enabled:
             self._events.put(text)
-
-    def _drain_pilot_events(self) -> None:
-        while self.pilot.events:
-            text = self.pilot.events.pop(0)
-            self.overlay.update(thought=text)
-            self.history.append(text)
-            if self.cfg.commentary.enabled:
-                self._events.put(text)      # she reacts to the battle in her own words
-
-    def _name_something(self) -> None:
-        if self._named_this_screen:
-            # Already typed; if we're still here, confirm with OK.
-            self.emu.press("START", hold=2, wait=10)
-            self.emu.press("A", hold=2, wait=20)
-            return
-        self._named_this_screen = True
-        self.emu.wait_frames(40)    # let the screen fade in
-        kind, species_id = self.naming.info()
-        species = self.game.species_name(species_id) if kind in ("nickname", "caught") else ""
-        if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet()
-        self.overlay.update(thought="Thinking of a name...")
-        name, say = self.brain.choose_name(kind, MAX_CHARS.get(kind, 7), species, self._context)
-        if say:
-            self.narrator.say(say)
-        self.overlay.update(thought=f"Typing the name: {name}")
-        if name and self.naming.type_name(name):
-            self.history.append(f"Named {kind} {species}: {name}".replace("  ", " "))
-            self._event(f"Named {kind} {species} '{name}'.".replace("  ", " "))
-        else:
-            self.emu.press("START", hold=2, wait=10)   # fall back to the game's default name
-            self.emu.press("A", hold=2, wait=20)
 
     def _commentary_worker(self) -> None:
         last = 0.0
         while True:
             batch = [self._events.get()]
-            # Group things that happen close together into one comment.
-            time.sleep(1.0)
+            time.sleep(1.0)    # group things that happen close together
             while not self._events.empty():
                 batch.append(self._events.get_nowait())
             wait = self.cfg.commentary.min_seconds_between - (time.time() - last)
@@ -250,16 +268,86 @@ class Agent:
                 self.narrator.say(line)
                 last = time.time()
 
+    # ------------------------------------------------------------------ battle choices (hers)
+    def _battle_context(self, info: BattleInfo) -> str:
+        me, foe = info.player, info.enemy
+        words = [foe.species_name if foe else "", me.species_name if me else ""] + \
+                [m.name for m in (me.moves if me else [])]
+        lessons = self.memory.relevant_lessons(words)
+        parts = [
+            "YOU ARE IN A BATTLE" + (" against another trainer (you can't run away)." if info.is_trainer else
+                                     " with a wild creature."),
+            f"Your Pokémon: {me.summary() if me else '?'}",
+            f"Opponent: {foe.species_name} level {foe.level}, its HP bar is {hp_bar(foe)}"
+            + (f" [{foe.status}]" if foe and foe.status else "") if foe else "Opponent: ?",
+            f"Latest battle message: {info.message}" if info.message else "",
+            ("Things you've noticed in past battles:\n" + "\n".join(f"- {l}" for l in lessons)) if lessons
+            else "You haven't learned anything about how battles work yet.",
+        ]
+        return self._memory_text(short=True) + "\n\n" + "\n".join(p for p in parts if p)
+
+    def _choose_battle_action(self, info: BattleInfo, labels: list[str], choices: list[Choice]) -> int:
+        context = self._battle_context(info)
+        self._context = context
+        if self.cfg.voice.wait_for_voice:
+            self.narrator.wait_until_quiet()
+        self.overlay.update(thought="Thinking...")
+        d = self.brain.decide(context, labels)
+        self._apply_decision(d, labels[d.choice])
+        self.history.append(f"In battle: {labels[d.choice]}")
+        return d.choice
+
+    def _choose_next_pokemon(self, alive: list[tuple[int, Mon]]) -> int:
+        labels = [f"Send out {m.summary()}" for _, m in alive]
+        context = self._memory_text(short=True) + "\n\nYour Pokémon fainted! Choose who to send out next."
+        if self.cfg.voice.wait_for_voice:
+            self.narrator.wait_until_quiet()
+        d = self.brain.decide(context, labels)
+        self._apply_decision(d, labels[d.choice])
+        return d.choice
+
+    def _absorb_battle_lessons(self) -> None:
+        while self.pilot.lessons:
+            lesson = self.pilot.lessons.pop(0)
+            if self.memory.add_lesson(lesson):
+                self._event(f"You noticed: {lesson}")
+
+    # ------------------------------------------------------------------ naming (hers)
+    def _name_something(self) -> None:
+        if self._named_this_screen:
+            self.emu.press("START", hold=2, wait=10)   # already typed: confirm with OK
+            self.emu.press("A", hold=2, wait=20)
+            return
+        self._named_this_screen = True
+        self.emu.wait_frames(40)    # let the screen fade in
+        kind, species_id = self.naming.info()
+        species = self.game.species_name(species_id) if kind in ("nickname", "caught") else ""
+        if self.cfg.voice.wait_for_voice:
+            self.narrator.wait_until_quiet()
+        self.overlay.update(thought="Thinking of a name...")
+        name, say = self.brain.choose_name(kind, MAX_CHARS.get(kind, 7), species, self._memory_text(short=True))
+        if say:
+            self.narrator.say(say)
+        self.overlay.update(thought=f"Typing the name: {name}")
+        if name and self.naming.type_name(name):
+            what = {"player": "yourself", "rival": "your rival"}.get(kind, f"your {species}")
+            self.memory.add_journal(f"You named {what} '{name}'.")
+            self._event(f"You named {what} '{name}'.")
+        else:
+            self.emu.press("START", hold=2, wait=10)   # fall back to the game's default name
+            self.emu.press("A", hold=2, wait=20)
+
     # ------------------------------------------------------------------ dialog
     def _dialog(self) -> None:
         msg = self.game.message()
         if msg and msg != self._last_message:
             self._last_message = msg
-            short = msg if len(msg) <= 160 else msg[:157] + "..."
-            self.history.append(f'Message on screen: "{short}"')
+            short = msg if len(msg) <= 200 else msg[:197] + "..."
+            self._dialog_lines.append(short)
+            self.history.append(f'On screen: "{short}"')
             self.overlay.log(f'💬 {short}')
             if self.cfg.commentary.enabled:
-                self._events.put(f'Someone in the game says: "{short}"')
+                self._events.put(f'Text on screen: "{short}"')
             self._dialog_presses = 0
         self._dialog_presses += 1
         # Mostly A to advance text; an occasional B closes menus we didn't mean to open.
@@ -268,31 +356,104 @@ class Agent:
         else:
             self.emu.press("A", hold=2, wait=15)
 
-    # ------------------------------------------------------------------ overworld
-    def _context_text(self, s: GameState, objective: str) -> str:
-        team = "\n".join(f"- {m.summary()}; moves: {', '.join(f'{mv.name} ({mv.pp} PP)' for mv in m.moves)}"
-                         for m in s.party) or "- (no Pokémon yet)"
-        bag = ", ".join(f"{n} x{q}" for n, q in (s.items + s.balls)[:10]) or "empty"
-        parts = [
-            f"CURRENT OBJECTIVE: {objective}",
-            f"LOCATION: {s.map_name}, standing at ({s.x},{s.y}). Badges: {s.badges}. Money: ₽{s.money}.",
-            f"TEAM:\n{team}",
-            f"BAG: {bag}" + (f". KEY ITEMS: {', '.join(s.key_items)}" if s.key_items else ""),
-        ]
-        if self.notes:
-            parts.append("YOUR NOTES:\n" + "\n".join(f"- {n}" for n in self.notes))
-        if self.history:
-            parts.append("RECENT HISTORY (oldest first):\n" + "\n".join(f"- {h}" for h in self.history))
+    def _finish_conversation(self) -> None:
+        if self._dialog_lines:
+            said = " ".join(self._dialog_lines)[:300]
+            if self._talking_to:
+                if self._talking_to not in self.memory.people:
+                    self._discovered()
+                self.memory.people[self._talking_to] = said
+        self._dialog_lines = []
+        self._talking_to = None
+
+    # ------------------------------------------------------------------ memory text
+    def _memory_text(self, short: bool = False) -> str:
+        m = self.memory
+        parts = []
+        if m.goal:
+            parts.append(f"YOUR CURRENT GOAL (you chose it): {m.goal}")
+        if m.mood:
+            parts.append(f"HOW YOU FEEL: {m.mood}")
+        journal = m.journal[-(8 if short else 15):]
+        if journal:
+            parts.append("YOUR JOURNAL (what you've learned so far):\n" + "\n".join(f"- {j}" for j in journal))
+        else:
+            parts.append("YOUR JOURNAL is empty. You've just started and know nothing yet.")
+        if not short and m.lessons:
+            parts.append("THINGS YOU'VE NOTICED:\n" + "\n".join(f"- {l}" for l in m.lessons[-6:]))
         return "\n\n".join(parts)
+
+    def _context_text(self, s: GameState) -> str:
+        team = "\n".join(f"- {mon.summary()}; moves: " +
+                         ", ".join(f"{mv.name} ({mv.type_name}, {mv.pp} PP)" for mv in mon.moves)
+                         for mon in s.party) or "- (you don't have any Pokémon)"
+        bag = ", ".join(f"{n} x{q}" for n, q in (s.items + s.balls)[:10]) or "empty"
+        here = f"{s.map_group}.{s.map_num}|"
+        people_here = [said for key, said in self.memory.people.items() if key.startswith(here)]
+        places = list(dict.fromkeys(self.memory.places.values()))[-15:]
+        parts = [
+            self._memory_text(),
+            f"WHERE YOU ARE: {s.map_name}.",
+            "PLACES YOU'VE BEEN: " + (", ".join(places) if places else "just here"),
+            f"YOUR POKÉMON:\n{team}",
+            f"BAG: {bag}" + (f". KEY ITEMS: {', '.join(s.key_items)}" if s.key_items else "")
+            + f". MONEY: ₽{s.money}. BADGES: {s.badges}.",
+        ]
+        if people_here:
+            parts.append("WHAT PEOPLE HERE TOLD YOU:\n" + "\n".join(f'- "{p[:160]}"' for p in people_here[-5:]))
+        if self.history:
+            parts.append("RECENTLY (oldest first):\n" + "\n".join(f"- {h}" for h in self.history))
+        if self._actions_since_discovery >= 8:
+            parts.append(f"You've done {self._actions_since_discovery} things in a row without discovering "
+                         "anything new.")
+        return "\n\n".join(parts)
+
+    def _discovered(self) -> None:
+        self._actions_since_discovery = 0
+
+    # ------------------------------------------------------------------ her decisions
+    def _apply_decision(self, d, action_label: str) -> None:
+        print(f"[brain] {d.thought}  ->  {action_label}")
+        self.memory.bump("decisions")
+        self.overlay.update(thought=d.thought, action=action_label)
+        self.overlay.log(f"▶ {action_label}")
+        if d.say:
+            self.narrator.say(d.say)
+        if d.note:
+            self.memory.add_journal(d.note)
+        if d.goal:
+            self.memory.goal = d.goal[:200]
+            self.overlay.update(goal=self.memory.goal)
+        self._decisions_since_reflect += 1
+
+    def _maybe_reflect(self, s: GameState) -> None:
+        if self._decisions_since_reflect < REFLECT_EVERY:
+            return
+        self._decisions_since_reflect = 0
+        r = self.brain.reflect(self._context_text(s))
+        if r.get("goal"):
+            self.memory.goal = r["goal"][:200]
+        if r.get("mood"):
+            self.memory.mood = r["mood"][:40]
+        if r.get("journal"):
+            self.memory.add_journal(r["journal"])
+        if len(self.memory.journal) > JOURNAL_LIMIT:
+            self.memory.journal = self.brain.condense(self.memory.journal)
+        self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
+        self.memory.save()
 
     def _overworld_turn(self) -> None:
         s = self.game.state()
         self.world.mark_visited(s)
-        if self._last_map != (s.map_group, s.map_num):
-            self._last_map = (s.map_group, s.map_num)
+        map_key = f"{s.map_group}.{s.map_num}"
+        if self.memory.visit(map_key, s.map_name):
+            self._discovered()
+            self._event(f"You arrived somewhere new: {s.map_name}.")
+        if self._last_map != map_key:
+            self._last_map = map_key
             self.overlay.log(f"📍 {s.map_name}")
-        objective = current_objective(self.game, s)
-        self.overlay.update(objective=objective, location=s.map_name, badges=s.badges, money=s.money)
+        self.overlay.update(location=s.map_name, badges=s.badges, money=s.money)
+        self._maybe_reflect(s)
 
         options, _grid = self.world.build_options(s)
         if not options:
@@ -306,28 +467,33 @@ class Agent:
 
         lines = []
         for o in options:
-            line = f"{o.label} ({o.distance} steps away)"
+            line = f"{o.label}, {o.distance} {'step' if o.distance == 1 else 'steps'} away"
             n = self.pick_counts[o.key]
             if n:
-                line += f" [you've picked this {n} time{'s' if n > 1 else ''}]"
+                line += f" [you've picked this {n} time{'s' if n > 1 else ''} recently]"
             lines.append(line)
 
-        self._context = self._context_text(s, objective)
+        self._context = self._context_text(s)
         if self.cfg.voice.wait_for_voice:
             self.narrator.wait_until_quiet()
         self.overlay.update(thought="Thinking...")
         decision = self.brain.decide(self._context, lines)
         opt = options[decision.choice]
-        print(f"[brain] {decision.thought}  ->  {opt.label}")
-        self.overlay.update(thought=decision.thought, action=opt.label)
-        self.overlay.log(f"▶ {opt.label}")
-        if decision.say:
-            self.narrator.say(decision.say)
-        if decision.note:
-            self.notes.append(decision.note[:150])
+        self._apply_decision(decision, opt.label)
         self.pick_counts[opt.key] += 1
+        self._actions_since_discovery += 1
 
+        steps_before = self.world.steps_taken
+        if opt.kind == "talk":
+            self._talking_to = opt.key
         result = self.world.execute(opt, s)
+        self.memory.bump("steps", self.world.steps_taken - steps_before)
+        if opt.kind in ("warp", "exit") and result.outcome == "warped":
+            if opt.key not in self.memory.links:
+                self._discovered()
+            self.memory.links[opt.key] = result.detail
         detail = f" ({result.detail})" if result.detail else ""
         self.history.append(f"{opt.label} -> {result.outcome}{detail}")
         print(f"[agent] {opt.label} -> {result.outcome}{detail}")
+        if self.memory.stats.get("decisions", 0) % 5 == 0:
+            self.memory.save()
