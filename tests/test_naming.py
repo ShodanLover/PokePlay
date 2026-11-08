@@ -162,6 +162,34 @@ def test_leaked_instructions_are_not_spoken():
     assert b.comment(["We won"], "CONTEXT") == "That went better than expected."
 
 
+def test_voice_never_holds_up_her_next_thought(tmp_path):
+    from pokeplay.brain import Decision
+
+    agent, _ = _named_agent(tmp_path)
+    agent._think_seconds = 4.0
+    waited, said = [], []
+    agent.narrator.wait_until_quiet = lambda timeout: waited.append(timeout)
+    agent._speak = said.append
+    agent._wait_for_voice()
+    assert waited == [3.0]                              # 7 seconds, minus the time thinking takes
+
+    agent.narrator.is_speaking = lambda: True
+    agent._apply_decision(Decision("hmm", "I wonder", 0), "Go north")
+    assert said == [] and json.loads(agent.overlay.snapshot())["thought"] == "hmm"   # thought, no speech
+    agent.narrator.is_speaking = lambda: False
+    agent._apply_decision(Decision("hmm", "I wonder", 0), "Go north")
+    assert said == ["I wonder"]
+
+
+def test_twitch_channel_reaches_overlay(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    assert json.loads(agent.overlay.snapshot())["twitch_channel"] == ""
+
+    from pokeplay.agent import Agent
+    agent.cfg.overlay.twitch_channel = " https://www.twitch.tv/#MyChannel "
+    assert json.loads(Agent(agent.cfg).overlay.snapshot())["twitch_channel"] == "mychannel"
+
+
 def test_subtitles_follow_voice():
     import time
     from pokeplay.narrator import Narrator

@@ -16,6 +16,7 @@ context_tokens = 4096
 # She chooses her own name and personality on first launch and saves them in persona.json.
 # Delete persona.json if you ever want her to reinvent herself.
 streamer_name = ""                  # leave empty to let her choose (recommended)
+max_seconds_between_thoughts = 7    # the most she stands still before thinking again (she doesn't always speak)
 persona_hint = "a female AI streamer with a dry, offbeat sense of humor who gets a little unhinged when things go wrong"   # used once, when she invents herself
 # How she talks, in your own words. Leave empty for the built-in style
 # (casual, dry humor, no "I'm so chaotic!", no asterisk actions, no forced catchphrases).
@@ -39,6 +40,7 @@ wait_for_voice = true     # finish talking before choosing the next action
 
 [overlay]
 port = 8765               # OBS Browser Source URL: http://127.0.0.1:8765
+twitch_channel = ""       # your Twitch channel name, to show chat on the overlay (display only; never reaches the AI)
 
 [commentary]
 enabled = true            # react out loud to battles, level ups, etc.

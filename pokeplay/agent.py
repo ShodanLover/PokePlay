@@ -38,6 +38,7 @@ class Agent:
                            cfg.brain.temperature, cfg.brain.context_tokens)
         self.memory = Memory.load(cfg.brain.memory_file)
         self.overlay = OverlayState()
+        self.overlay.update(twitch_channel=cfg.overlay.twitch_channel.strip().lower().rsplit("/", 1)[-1].lstrip("#"))
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
@@ -50,6 +51,8 @@ class Agent:
                                  party_chooser=self._choose_next_pokemon, yesno_chooser=self._answer_battle_question)
         self.menus = MenuReader(self.emu, self.game)
         self._in_menus = False          # she opened something; escape unknown screens with B
+        self._think_seconds = 3.0       # how long her last decision took (keeps the gap between thoughts short)
+        self._think_started = time.time()
 
         self.history: collections.deque[str] = collections.deque(maxlen=10)
         self.pick_counts: collections.Counter[str] = collections.Counter()
@@ -353,8 +356,7 @@ class Agent:
     def _choose_battle_action(self, info: BattleInfo, labels: list[str], choices: list[Choice]) -> int:
         context = self._battle_context(info)
         self._context = context
-        if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet()
+        self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
         d = self.brain.decide(context, labels)
         self._apply_decision(d, labels[d.choice])
@@ -364,16 +366,14 @@ class Agent:
     def _choose_next_pokemon(self, alive: list[tuple[int, Mon]]) -> int:
         labels = [f"Send out {m.summary()}" for _, m in alive]
         context = self._memory_text(short=True) + "\n\nYour Pokémon fainted! Choose who to send out next."
-        if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet()
+        self._wait_for_voice()
         d = self.brain.decide(context, labels)
         self._apply_decision(d, labels[d.choice])
         return d.choice
 
     def _answer_battle_question(self, question: str) -> bool:
         context = self._memory_text(short=True) + f"\n\nIN BATTLE, the game asks: \"{question}\""
-        if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet()
+        self._wait_for_voice()
         d = self.brain.decide(context, ["YES", "NO"])
         self._apply_decision(d, f"Answered {'YES' if d.choice == 0 else 'NO'} to: {question}")
         return d.choice == 0
@@ -392,8 +392,7 @@ class Agent:
         cursor = f" (the cursor is on: {options[menu.cursor]})" if 0 <= menu.cursor < len(options) else ""
         context = (self._memory_text(short=True) + f"\n\nON SCREEN: {menu.title}{cursor}\n"
                    "You navigate menus one choice at a time, like using a controller.")
-        if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet()
+        self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
         d = self.brain.decide(context, options)
         label = options[d.choice]
@@ -419,8 +418,7 @@ class Agent:
         self.emu.wait_frames(40)    # let the screen fade in
         kind, species_id = self.naming.info()
         species = self.game.species_name(species_id) if kind in ("nickname", "caught") else ""
-        if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet()
+        self._wait_for_voice()
         self.overlay.update(thought="Thinking of a name...")
         name, say = self.brain.choose_name(kind, MAX_CHARS.get(kind, 7), species, self._memory_text(short=True))
         if say:
@@ -511,13 +509,20 @@ class Agent:
         self._actions_since_discovery = 0
 
     # ------------------------------------------------------------------ her decisions
+    def _wait_for_voice(self) -> None:
+        """Let her finish talking, but never so long that she goes too long between thoughts."""
+        if self.cfg.voice.wait_for_voice:
+            self.narrator.wait_until_quiet(max(0.0, self.cfg.brain.max_seconds_between_thoughts - self._think_seconds))
+        self._think_started = time.time()
+
     def _apply_decision(self, d, action_label: str) -> None:
+        self._think_seconds = time.time() - self._think_started
         print(f"[brain] {d.thought}  ->  {action_label}")
         self._activity = action_label[:120]
         self.memory.bump("decisions")
         self.overlay.update(thought=d.thought, action=action_label)
         self.overlay.log(f"▶ {action_label}")
-        if d.say:
+        if d.say and not self.narrator.is_speaking():   # thinking doesn't have to mean talking
             self._speak(d.say)
         if d.note:
             self.memory.add_journal(d.note)
@@ -574,8 +579,7 @@ class Agent:
             lines.append(line)
 
         self._context = self._context_text(s)
-        if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet()
+        self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
         decision = self.brain.decide(self._context, lines)
         opt = options[decision.choice]

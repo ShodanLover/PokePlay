@@ -22,6 +22,7 @@ class BrainConfig:
     temperature: float = 0.75
     context_tokens: int = 4096
     streamer_name: str = ""     # leave empty: the AI picks its own name on first launch
+    max_seconds_between_thoughts: float = 7   # she stops waiting for her voice so she keeps moving
     # The only thing decided for her; she invents the rest of herself.
     persona_hint: str = "a female AI streamer with a dry, offbeat sense of humor who gets a little unhinged when things go wrong"
     speaking_style: str = ""   # how she talks, in your own words (empty = the built-in style)
@@ -46,6 +47,7 @@ class VoiceConfig:
 @dataclass
 class OverlayConfig:
     port: int = 8765
+    twitch_channel: str = ""    # shows this channel's chat on the overlay (display only; never reaches the AI)
 
 
 @dataclass

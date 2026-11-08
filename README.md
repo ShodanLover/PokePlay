@@ -35,7 +35,8 @@ It runs **completely free** on your own PC: no paid AI services and no subscript
   safety rules: family-friendly, within Twitch guidelines, no hate or harassment.
 - **Subtitles:** everything she says is shown word-for-word. The AI writes her words and the voice
   reads them, so captions are free and exact.
-- An **overlay** shows her thoughts, her own goal and mood, her team, and recent events.
+- An **overlay** shows her thoughts, her own goal and mood, and your Twitch chat (set `twitch_channel` in
+  `config.toml`; it's display only and never reaches the AI). Her team sits in the subtitle bar along the bottom.
 
 **One honest limit:** the AI model learned from the internet, so somewhere inside it does know
 Pokémon. She's told to ignore that and only trust what she learns on stream, but a small model will
