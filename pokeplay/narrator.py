@@ -116,7 +116,8 @@ class Narrator:
             from kokoro_onnx import Kokoro          # installed by: python -m pokeplay --get-voice kokoro
             from .voices import KOKORO_MODEL, KOKORO_VOICES
             self._kokoro = Kokoro(KOKORO_MODEL, KOKORO_VOICES)
-        samples, rate = self._kokoro.create(text, voice=self.kokoro_voice, speed=self.speed, lang="en-us")
+        lang = "en-gb" if self.kokoro_voice.startswith("b") else "en-us"
+        samples, rate = self._kokoro.create(text, voice=self.kokoro_voice, speed=self.speed, lang=lang)
         import numpy as np                      # comes with kokoro-onnx
         pcm = (np.clip(samples * (self.volume / 100.0), -1.0, 1.0) * 32767).astype("<i2")
         fd, path = tempfile.mkstemp(suffix=".wav")
