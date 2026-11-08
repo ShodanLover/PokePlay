@@ -423,7 +423,8 @@ class Brain:
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
             f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
-            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). "
+            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Make it strange, funny and "
+            "a bit deranged, not plain. If an object is involved, you may flirt with it playfully. "
             "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())
             + 'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
