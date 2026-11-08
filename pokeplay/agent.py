@@ -11,13 +11,14 @@ import time
 
 from . import addresses as A
 from .battle import BattlePilot, Choice, hp_bar
-from .brain import GUESSWORK, OVERUSED_WORDS, Brain, BrainOffline, clean_spoken
+from .brain import COMMON_WORDS, GUESSWORK, OVERUSED_WORDS, Brain, BrainOffline, _words, clean_spoken
 from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
 from .menus import Menu, MenuReader
 from .naming import MAX_CHARS, NamingScreen, clean_name
+from .hints import hint_for
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
@@ -31,13 +32,26 @@ REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
 MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
-EVENT_MAX_AGE = 10          # seconds after which something that happened is too old to react to
+HINT_EVERY = 15             # map decisions between hints about what to do next
+HINT_LASTS = 4              # how many map decisions each hint stays in her mind
+GOAL_PATIENCE = 15         # decisions with no discovery before her current goal is dropped
+EVENT_MAX_AGE = 10         # seconds after which something that happened is too old to react to
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
 LONG_SILENCE = 20          # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
+
+
+def _ideas(text: str) -> set[str]:
+    return {w.removesuffix("'s") for w in _words(text) if len(w) >= 4 and w not in COMMON_WORDS}
+
+
+def _same_idea(a: str, b: str) -> bool:
+    """True if two sentences are about the same thing ("fix the nickname" / "Bulbasaur's nickname is wrong")."""
+    x, y = _ideas(a), _ideas(b)
+    return bool(x and y) and len(x & y) >= min(2, len(x), len(y))
 
 
 class Agent:
@@ -75,6 +89,9 @@ class Agent:
         self._failed_options: set[str] = set()      # map actions that just didn't work
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
+        self._hint_clock = -1
+        self._decisions_on_goal = 0                 # decisions since her goal changed or she found something new
+        self._abandoned_goals: collections.deque[str] = collections.deque(maxlen=5)
         self._last_said = time.time()
         self._menu_cooldown = 0        # map decisions until the main menu is offered again
         self._events: queue.Queue[str] = queue.Queue()
@@ -557,6 +574,10 @@ class Agent:
             parts.append("WHAT PEOPLE HERE TOLD YOU:\n" + "\n".join(f'- "{p[:160]}"' for p in people_here[-5:]))
         if self.history:
             parts.append("RECENTLY (oldest first):\n" + "\n".join(f"- {h}" for h in self.history))
+        self._hint_clock += 1
+        if self._hint_clock % HINT_EVERY < HINT_LASTS:
+            parts.append("A THOUGHT COMES TO YOU ABOUT WHAT TO DO NEXT (follow it if you can): "
+                         + hint_for(s.badges, bool(s.party), s.key_items))
         if self._actions_since_discovery >= 8:
             parts.append(f"You've done {self._actions_since_discovery} things in a row without discovering "
                          "anything new.")
@@ -564,6 +585,29 @@ class Agent:
 
     def _discovered(self) -> None:
         self._actions_since_discovery = 0
+        self._decisions_on_goal = 0
+
+    def _set_goal(self, goal: str) -> None:
+        """Her choice, unless it's an idea she just had to abandon. A really new goal gets a fresh chance."""
+        goal = goal[:200]
+        if any(_same_idea(goal, old) for old in self._abandoned_goals):
+            return
+        if not _same_idea(goal, self.memory.goal):
+            self._decisions_on_goal = 0
+        self.memory.goal = goal
+        self.overlay.update(goal=goal)
+
+    def _give_up_on_goal(self) -> None:
+        """A goal that's gone nowhere for a while goes away, with the notes feeding it, so one idea can't take over."""
+        old = self.memory.goal
+        print(f"[agent] no progress for a while; dropping her goal: {old}")
+        self._abandoned_goals.append(old)
+        self.memory.journal = [note for note in self.memory.journal if not _same_idea(note, old)]
+        self.memory.goal = ""
+        self.memory.mood = ""
+        self.history.clear()
+        self._decisions_on_goal = 0
+        self.overlay.update(goal="", mood="")
 
     # ------------------------------------------------------------------ her decisions
     def _wait_for_voice(self) -> None:
@@ -585,8 +629,11 @@ class Agent:
         if d.note and self._worth_noting(d.note):
             self.memory.add_journal(d.note)
         if d.goal:
-            self.memory.goal = d.goal[:200]
-            self.overlay.update(goal=self.memory.goal)
+            self._set_goal(d.goal)
+        if not self._in_battle:
+            self._decisions_on_goal += 1
+        if self.memory.goal and self._decisions_on_goal >= GOAL_PATIENCE:
+            self._give_up_on_goal()
         self._decisions_since_reflect += 1
 
     def _maybe_reflect(self, s: GameState) -> None:
@@ -595,7 +642,7 @@ class Agent:
         self._decisions_since_reflect = 0
         r = self.brain.reflect(self._context_text(s))
         if r.get("goal"):
-            self.memory.goal = r["goal"][:200]
+            self._set_goal(r["goal"])
         if r.get("mood"):
             self.memory.mood = r["mood"][:40]
         if r.get("journal") and self._worth_noting(r["journal"]):
@@ -623,7 +670,7 @@ class Agent:
 
     def _worth_noting(self, note: str) -> bool:
         """Her journal is for new facts: guesses and near-copies of recent notes make her talk in circles."""
-        if GUESSWORK.search(note):
+        if GUESSWORK.search(note) or any(_same_idea(note, old) for old in self._abandoned_goals):
             return False
         return not any(difflib.SequenceMatcher(None, note.lower(), old.lower()).ratio() > 0.6
                        for old in self.memory.journal[-15:])

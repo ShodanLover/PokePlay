@@ -470,6 +470,44 @@ def test_old_events_get_no_reaction(tmp_path):
     assert asked and asked[0] == ["Just grew to level 7."]
 
 
+def test_stale_goal_is_dropped_with_its_notes(tmp_path):
+    from pokeplay.agent import GOAL_PATIENCE
+    from pokeplay.brain import Decision
+
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.goal = "Fix Bulbasaur's nickname"
+    agent.memory.journal[:] = ["Bulbasaur's nickname is wrong.", "The shop sells potions."]
+    for _ in range(GOAL_PATIENCE):
+        agent._apply_decision(Decision("t", "", 0), "Go north")
+    assert agent.memory.goal == "" and agent.memory.journal == ["The shop sells potions."]
+    agent._set_goal("Sort out that nickname on Bulbasaur")      # can't go straight back to it
+    assert agent.memory.goal == ""
+    agent._set_goal("Reach the next town")
+    assert agent.memory.goal == "Reach the next town"
+
+
+def test_discoveries_keep_her_goal_alive(tmp_path):
+    from pokeplay.agent import GOAL_PATIENCE
+    from pokeplay.brain import Decision
+
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.goal = "Reach the next town"
+    for _ in range(GOAL_PATIENCE - 1):
+        agent._apply_decision(Decision("t", "", 0), "Go north")
+    agent._discovered()
+    agent._apply_decision(Decision("t", "", 0), "Go north")
+    assert agent.memory.goal == "Reach the next town"
+
+
+def test_hints_follow_her_progress():
+    from pokeplay.hints import BY_BADGES, NO_TEAM, PARCEL, hint_for
+
+    assert hint_for(0, False, []) == NO_TEAM
+    assert hint_for(0, True, ["OAK'S PARCEL"]) == PARCEL
+    assert hint_for(0, True, []) == BY_BADGES[0]
+    assert hint_for(8, True, []) == BY_BADGES[8] and hint_for(99, True, []) == BY_BADGES[8]
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 
