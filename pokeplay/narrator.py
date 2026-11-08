@@ -20,13 +20,14 @@ import wave
 
 class Narrator:
     def __init__(self, engine: str = "windows", piper_model: str = "", rate: int = 0,
-                 max_queue: int = 3, on_speak=None, on_done=None, gender: str = "female"):
+                 max_queue: int = 3, on_speak=None, on_done=None, gender: str = "female", volume: int = 100):
         self.engine = engine
         self.piper_model = piper_model
         self.rate = rate
         self.on_speak = on_speak      # callback(text) when a line starts playing
         self.on_done = on_done        # callback() when it finishes (clears subtitles)
         self.gender = gender
+        self.volume = max(0, min(100, int(volume)))
         self._q: queue.Queue[str] = queue.Queue()
         self._max_queue = max_queue
         self._busy = threading.Event()
@@ -85,7 +86,7 @@ class Narrator:
         script = (
             "Add-Type -AssemblyName System.Speech; "
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-            f"$s.Rate = {int(self.rate)}; "
+            f"$s.Rate = {int(self.rate)}; $s.Volume = {self.volume}; "
             f"try {{ $s.SelectVoiceByHints('{'Male' if self.gender.lower() == 'male' else 'Female'}') }} catch {{}}; "
             "$s.Speak([Console]::In.ReadToEnd())"
         )

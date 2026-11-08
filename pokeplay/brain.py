@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import collections
+import difflib
 import json
 import random
 import re
@@ -60,6 +62,8 @@ class Brain:
         self.model = model
         self.name = streamer_name or "the streamer"
         self.personality = personality
+        self.catchphrase = ""
+        self.recent_said: collections.deque[str] = collections.deque(maxlen=10)
         self.temperature = temperature
         self.context_tokens = context_tokens
         self.timeout = timeout
@@ -117,10 +121,24 @@ class Brain:
             + SAFETY
         )
 
+    def _recent_block(self) -> str:
+        if not self.recent_said:
+            return ""
+        return ("\n\nTHINGS YOU SAID OUT LOUD RECENTLY (say something fresh: don't reuse these phrases, "
+                "jokes or sentence openings):\n" + "\n".join(f'- "{s}"' for s in self.recent_said))
+
+    def is_repeat(self, text: str) -> bool:
+        """True if this line is basically something she just said."""
+        t = text.lower()
+        return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.72 for old in self.recent_said)
+
+    def remember_said(self, text: str) -> None:
+        self.recent_said.append(text[:200])
+
     def decide(self, context: str, option_lines: list[str]) -> Decision:
         numbered = "\n".join(f"{i + 1}. {line}" for i, line in enumerate(option_lines))
         prompt = (
-            f"{context}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
+            f"{context}{self._recent_block()}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
             "Reply with JSON only: "
             '{"thought": "your reasoning, 1-2 sentences", '
             '"say": "think out loud to chat in 1-3 short spoken sentences: what you notice and why you chose this", '
@@ -238,12 +256,14 @@ class Brain:
             return entries[-keep:]
 
     def greet(self, context: str = "") -> str:
-        """Her own opening line for the stream."""
-        return self.comment(["The stream just started and viewers are arriving. Say hello however you like."], context)
+        """Her own opening line for the stream (the one place her catchphrase is suggested)."""
+        hint = f" Your catchphrase is \"{self.catchphrase}\" if you feel like using it." if self.catchphrase else ""
+        return self.comment(["The stream just started and viewers are arriving. Say hello however you like." + hint],
+                            context)
 
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
-            f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
+            f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to your viewers in one or two short spoken sentences (under 35 words total). "
             "No emojis, no hashtags, no quotation marks."
         )

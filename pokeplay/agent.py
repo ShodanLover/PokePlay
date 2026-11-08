@@ -40,7 +40,7 @@ class Agent:
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
-                                 gender=cfg.voice.gender)
+                                 gender=cfg.voice.gender, volume=cfg.voice.volume)
         self.naming = NamingScreen(self.emu)
         self.world = Overworld(self.emu, self.game, self.memory)
         self.pilot = BattlePilot(self.emu, self.game, chooser=self._choose_battle_action,
@@ -85,7 +85,7 @@ class Agent:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
         hello = self.brain.greet(self._memory_text())
         if hello:
-            self.narrator.say(hello)
+            self._speak(hello)
 
     def _wait_for_brain(self, first: bool = False) -> None:
         delay = 10
@@ -115,8 +115,9 @@ class Agent:
         if self.cfg.brain.streamer_name:          # manual override, if you ever want one
             persona["name"] = self.cfg.brain.streamer_name
         self.brain.name = persona["name"]
-        self.brain.personality = " ".join(x for x in (persona.get("personality", ""),
-                                                      f"Your catchphrase: {persona.get('catchphrase', '')}") if x)
+        # The catchphrase is NOT in every prompt (a small model would repeat it constantly).
+        self.brain.personality = persona.get("personality", "")
+        self.brain.catchphrase = persona.get("catchphrase", "")
         self.overlay.update(streamer=persona["name"])
         print(f"She is: {persona['name']} - {persona.get('personality', '')}")
 
@@ -265,8 +266,19 @@ class Agent:
                 time.sleep(wait)
             line = self.brain.comment(batch[-3:], self._context)
             if line:
-                self.narrator.say(line)
+                self._speak(line)
                 last = time.time()
+
+    def _speak(self, text: str) -> None:
+        """Say a line out loud, unless it's basically a repeat of something she just said."""
+        text = " ".join(text.split())
+        if not text:
+            return
+        if self.brain.is_repeat(text):
+            print(f"[voice] (skipped repeat) {text}")
+            return
+        self.brain.remember_said(text)
+        self.narrator.say(text)
 
     # ------------------------------------------------------------------ battle choices (hers)
     def _battle_context(self, info: BattleInfo) -> str:
@@ -327,7 +339,7 @@ class Agent:
         self.overlay.update(thought="Thinking of a name...")
         name, say = self.brain.choose_name(kind, MAX_CHARS.get(kind, 7), species, self._memory_text(short=True))
         if say:
-            self.narrator.say(say)
+            self._speak(say)
         self.overlay.update(thought=f"Typing the name: {name}")
         if name and self.naming.type_name(name):
             what = {"player": "yourself", "rival": "your rival"}.get(kind, f"your {species}")
@@ -418,7 +430,7 @@ class Agent:
         self.overlay.update(thought=d.thought, action=action_label)
         self.overlay.log(f"▶ {action_label}")
         if d.say:
-            self.narrator.say(d.say)
+            self._speak(d.say)
         if d.note:
             self.memory.add_journal(d.note)
         if d.goal:

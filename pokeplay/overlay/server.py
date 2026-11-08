@@ -9,6 +9,8 @@ from pathlib import Path
 
 HTML_PATH = Path(__file__).with_name("overlay.html")
 SUBTITLES_PATH = Path(__file__).with_name("subtitles.html")
+AVATAR_PATH = Path(__file__).with_name("avatar.html")
+AVATAR_JS_PATH = Path(__file__).with_name("avatar.js")
 
 
 class OverlayState:
@@ -36,6 +38,10 @@ def start_overlay(state: OverlayState, port: int = 8765) -> ThreadingHTTPServer:
         def do_GET(self):  # noqa: N802
             if self.path.startswith("/state.json"):
                 body, ctype = state.snapshot(), "application/json"
+            elif self.path.startswith("/avatar.js"):
+                body, ctype = AVATAR_JS_PATH.read_bytes(), "application/javascript; charset=utf-8"
+            elif self.path.startswith("/avatar"):
+                body, ctype = AVATAR_PATH.read_bytes(), "text/html; charset=utf-8"
             elif self.path.startswith("/subtitles"):
                 body, ctype = SUBTITLES_PATH.read_bytes(), "text/html; charset=utf-8"
             elif self.path in ("/", "/index.html"):

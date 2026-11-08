@@ -157,7 +157,24 @@ Also:
      sits on the right side.
    - **Browser** source → URL `http://127.0.0.1:8765/subtitles`, Width **1920**, Height **1080**, placed on
      top of everything. These are her live subtitles.
-   - **Audio**: OBS's **Desktop Audio** picks up both the game and the AI's voice automatically.
+   - **Browser** source → URL `http://127.0.0.1:8765/avatar`, Width **1920**, Height **1080**. This is her
+     animated pixel-art avatar in the bottom-right corner (blinks, talks, grins, glitches).
+   - **Audio**: OBS's **Desktop Audio** picks up both the game and her voice. To make her louder than
+     the game, see "Balancing her voice and the game" below.
+
+   Make sure all the Browser sources are **above** the mGBA window in the Sources list (the top of the
+   list is drawn on top). If one doesn't show, right-click it → **Refresh**.
+
+### Balancing her voice and the game
+
+Turn the **game** down rather than her up:
+1. While mGBA and PokePlay are running, right-click the **speaker icon** in the Windows taskbar →
+   **Open volume mixer**.
+2. Set **mGBA** to about **25-35%**. Leave **Windows PowerShell** (her Windows voice) or **Python**
+   (her Piper voice) at **100%**.
+
+OBS's Desktop Audio records these per-app levels, so viewers hear the same balance you do. Her voice
+volume itself is `volume` under `[voice]` in `config.toml` (0-100).
 5. Hit **Start Streaming**.
 
 ### Better voice (optional, still free)

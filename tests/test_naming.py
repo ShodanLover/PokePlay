@@ -107,7 +107,7 @@ def test_persona_created_once(tmp_path, monkeypatch):
     assert calls == [cfg.brain.persona_hint]            # only invented once
     assert agent.brain.name == "Nova"
     assert json.loads((tmp_path / "persona.json").read_text())["name"] == "Nova"
-    assert "Onward" in agent.brain.personality
+    assert agent.brain.catchphrase == "Onward" and "Onward" not in agent.brain.personality
     assert json.loads(agent.overlay.snapshot())["streamer"] == "Nova"
 
 
@@ -124,3 +124,12 @@ def test_subtitles_follow_voice():
     n.wait_until_quiet()
     time.sleep(0.1)
     assert json.loads(ov.snapshot())["subtitle"] == ""
+
+
+def test_repeats_are_filtered():
+    from pokeplay.brain import Brain
+    b = Brain("http://x", "m")
+    b.remember_said("Happy Monday, chaos gremlins! Let's do this!")
+    assert b.is_repeat("Happy Monday chaos gremlins, let's do this!")
+    assert not b.is_repeat("Ooh, a door. What could possibly go wrong?")
+    assert "Happy Monday" in b._recent_block()

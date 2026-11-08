@@ -28,6 +28,7 @@ engine = "windows"
 piper_model = ""          # e.g. "voices/en_US-lessac-medium.onnx" when engine = "piper"
 rate = 1                  # Windows voice speed, -10 (slow) to 10 (fast)
 gender = "female"         # Windows voice: "female" or "male"
+volume = 100              # her voice volume, 0-100 (turn the GAME down instead; see README)
 wait_for_voice = true     # finish talking before choosing the next action
 
 [overlay]

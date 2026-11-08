@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PokePlay Avatar</title>
+<style>
+  /* OBS Browser Source: http://127.0.0.1:8765/avatar  (1920 x 1080). She sits in the bottom-right corner. */
+  :root { --tag-bg: rgba(14, 18, 28, 0.86); --tag-text: #ffffff; --accent: #ff46aa; }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  .avatar { position: absolute; right: 32px; bottom: 32px; display: flex; flex-direction: column; align-items: center; }
+  canvas { image-rendering: pixelated; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  .tag { margin-top: 6px; padding: 4px 14px; border-radius: 999px; background: var(--tag-bg);
+    border: 2px solid var(--accent); color: var(--tag-text); font: 700 20px "Segoe UI", system-ui, sans-serif; }
+  .bubble { position: absolute; top: -14px; left: -46px; padding: 6px 12px; border-radius: 14px;
+    background: #fff; color: #222; font: 700 22px "Segoe UI", system-ui, sans-serif; opacity: 0; transition: opacity .2s; }
+  .bubble span { display: inline-block; animation: hop 1s infinite; }
+  .bubble span:nth-child(2) { animation-delay: .15s; } .bubble span:nth-child(3) { animation-delay: .3s; }
+  @keyframes hop { 0%, 60%, 100% { transform: none; } 30% { transform: translateY(-5px); } }
+</style>
+</head>
+<body>
+<div class="avatar">
+  <div class="bubble" id="bubble"><span>.</span><span>.</span><span>.</span></div>
+  <canvas id="avatar" width="256" height="256"></canvas>
+  <div class="tag" id="tag"></div>
+</div>
+<script src="/avatar.js"></script>
+<script>
+  startAvatar(document.getElementById("avatar"), {
+    bubble: document.getElementById("bubble"), nameTag: document.getElementById("tag") });
+</script>
+</body>
+</html>

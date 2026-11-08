@@ -17,7 +17,10 @@
   }
   html, body { margin: 0; background: transparent; color: var(--text);
     font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
-  .wrap { position: absolute; top: 24px; right: 24px; width: 560px; display: flex; flex-direction: column; gap: 14px; }
+  .wrap { position: absolute; top: 24px; right: 24px; width: 560px; max-height: 720px; overflow: hidden;
+    display: flex; flex-direction: column; gap: 14px;   /* leaves the bottom-right corner for her avatar */
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent);
+            mask-image: linear-gradient(to bottom, #000 calc(100% - 60px), transparent); }
   .card { background: var(--bg); border: 1px solid var(--edge); border-radius: 14px; padding: 16px 20px; }
   .label { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
   #say { font-size: 30px; line-height: 1.25; font-weight: 600; min-height: 76px; }
@@ -112,7 +115,7 @@
         return d;
       }));
       const log = document.getElementById("log");
-      log.replaceChildren(...(s.log || []).slice().reverse().map(t => {
+      log.replaceChildren(...(s.log || []).slice(-4).reverse().map(t => {
         const li = document.createElement("li"); li.textContent = t; return li;
       }));
     } catch (e) { /* agent not running yet */ }

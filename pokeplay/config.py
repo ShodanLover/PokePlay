@@ -34,6 +34,7 @@ class VoiceConfig:
     piper_model: str = ""
     rate: int = 1
     gender: str = "female"      # Windows voice: female | male
+    volume: int = 100           # her voice volume, 0-100
     wait_for_voice: bool = True
 
 
