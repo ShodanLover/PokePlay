@@ -34,12 +34,16 @@ GAME_SENSE = (
     "buttons are handled for you, so never worry about which button is which and ignore on-screen tips "
     "about buttons. Menus are for using things you already have, not for exploring. Games move forward when "
     "you go to new places and talk to new people, so head for doors, stairs and exits you haven't used yet, "
-    "and go outside. Don't search empty corners for secrets. You can't restart or reset the game. "
+    "and go outside. The way out of a building is usually a door at the bottom of the room. When someone tells "
+    "you where to go, go there. The game always works properly and nothing is a glitch: if something doesn't "
+    "work, do something different instead of trying it again. Don't search empty corners for secrets. You can't "
+    "restart or reset the game. "
     "Don't keep saying that you know nothing: talk about what's in front of you. "
 )
 
 # A journal is for what actually happened. Saved guesses get re-read as facts, and she talks herself in circles.
-GUESSWORK = re.compile(r"\b(?:might|maybe|could|perhaps|probably|possibly|not sure|i think|seems?)\b|\breset", re.I)
+GUESSWORK = re.compile(r"\b(?:might|maybe|could|perhaps|probably|possibly|not sure|i think|seems?)\b|\breset|\bglitch",
+                       re.I)
 
 
 # Pieces of Pokémon names: a first-timer couldn't pick a streamer name built from these.
@@ -112,7 +116,7 @@ def _opening(text: str) -> tuple[str, ...]:
 
 
 # Words she leaned on until they got old. Lines using them are thought, not said.
-OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b", re.I)
+OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b|\bglitch", re.I)
 
 # Lines that are her repeating her instructions rather than talking to viewers. Never read these out.
 LEAKED_INSTRUCTIONS = re.compile(r"\bthe user\b|\bunder \d+ words\b|\bshort (spoken )?sentences\b|\bin first person\b", re.I)

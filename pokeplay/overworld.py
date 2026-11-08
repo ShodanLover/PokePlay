@@ -95,7 +95,8 @@ class Overworld:
 
         # Doors, stairs and other warps.
         seen_dest = set()
-        for w in warps:
+        # A doorway can have decoy warp tiles beside the real one (behavior 0 never fires), so real ones go first.
+        for w in sorted(warps, key=lambda w: not grid.in_bounds(w.x, w.y) or grid.behavior[w.y][w.x] == 0):
             path = find_path(grid, (s.x, s.y), {(w.x, w.y)}, avoid - {(w.x, w.y)}, s.surfing)
             if path is None:
                 continue

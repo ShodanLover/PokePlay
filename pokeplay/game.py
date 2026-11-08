@@ -32,7 +32,9 @@ SUBSTRUCT_ORDER = [
 BEHAVIOR_TALL_GRASS = 0x02
 WATER_BEHAVIORS = {0x10, 0x11, 0x12, 0x13, 0x15, 0x1A, 0x1B}
 LEDGE_BEHAVIORS = {0x38: (1, 0), 0x39: (-1, 0), 0x3A: (0, -1), 0x3B: (0, 1)}  # jump direction
-ARROW_WARPS = {0x62: "right", 0x63: "left", 0x64: "up", 0x65: "down"}
+# Tiles that only warp when you push in one direction: door mats (0x62-65) and indoor stairs (0x6C-6F).
+ARROW_WARPS = {0x62: "right", 0x63: "left", 0x64: "up", 0x65: "down",
+               0x6C: "right", 0x6D: "left", 0x6E: "right", 0x6F: "left"}
 BEHAVIOR_COUNTER = 0x80
 
 

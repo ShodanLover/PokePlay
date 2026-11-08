@@ -269,6 +269,33 @@ def test_speak_reports_whether_she_said_it(tmp_path):
     assert agent._speak("That fence looks freshly painted.") is False
 
 
+def _house_world():
+    """A room like her house: a decoy warp tile listed before the real door mat, both going outside."""
+    from types import SimpleNamespace
+    from pokeplay.game import MapGrid, Warp
+    from pokeplay.overworld import Overworld
+
+    blocked = [[False] * 6 for _ in range(4)]
+    behavior = [[0] * 6 for _ in range(4)]
+    behavior[2][1] = 0x65                                   # the real door mat
+    game = SimpleNamespace(map_grid=lambda: MapGrid(6, 4, blocked, behavior), npcs=lambda: [],
+                           warps=lambda: [Warp(2, 2, 3, 0), Warp(1, 2, 3, 0)], connections=lambda: [])
+    state = SimpleNamespace(x=4, y=0, map_group=4, map_num=0, surfing=False, party=[])
+    return Overworld(None, game, None), state
+
+
+def test_the_real_door_is_offered_instead_of_the_decoy():
+    world, state = _house_world()
+    options, _ = world.build_options(state)
+    assert [o.target for o in options if o.kind == "warp"] == [(1, 2)]
+
+
+def test_stairs_know_which_way_to_push():
+    from pokeplay.game import ARROW_WARPS
+    assert ARROW_WARPS[0x6C] == "right" and ARROW_WARPS[0x6F] == "left"     # the two stairs in her house
+    assert ARROW_WARPS[0x65] == "down"                                      # front door mat
+
+
 def test_guesses_stay_out_of_her_journal(tmp_path):
     from pokeplay.brain import Decision
 

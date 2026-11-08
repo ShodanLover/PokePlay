@@ -61,7 +61,8 @@ class Agent:
         self.pick_counts: collections.Counter[str] = collections.Counter()
         self._menu_picks: collections.Counter[tuple[str, str]] = collections.Counter()   # since she last left the menus
         self._leaving_menus = False
-        self._menu_cooldown = 0         # map decisions until the main menu is offered again
+        self._failed_options: set[str] = set()      # map actions that just didn't work
+        self._menu_cooldown = 0        # map decisions until the main menu is offered again
         self._events: queue.Queue[str] = queue.Queue()
         self._context = ""
         self._last_message = ""
@@ -598,7 +599,7 @@ class Agent:
             return
         talks = sorted((o for o in options if o.kind == "talk"), key=lambda o: o.distance)[:MAX_TALK_OPTIONS]
         options = [o for o in options if o.kind != "talk"] + talks
-        options.sort(key=lambda o: (KIND_ORDER.get(o.kind, 9), o.distance))
+        options.sort(key=lambda o: (KIND_ORDER.get(o.kind, 9), o.key in self.memory.links, o.distance))   # new doors first
         hide_menu = self._menu_cooldown > 0 or not self.game.party()   # stuck in there, or nothing to use yet
         if self._menu_cooldown > 0:
             self._menu_cooldown -= 1
@@ -611,6 +612,8 @@ class Agent:
             n = self.pick_counts[o.key]
             if n:
                 line += f" [you've picked this {n} time{'s' if n > 1 else ''} recently]"
+            if o.key in self._failed_options:
+                line += " [this didn't work last time, so try something else]"
             lines.append(line)
 
         self._context = self._context_text(s)
@@ -627,6 +630,10 @@ class Agent:
             self._talking_to = opt.key
         result = self.world.execute(opt, s)
         self.memory.bump("steps", self.world.steps_taken - steps_before)
+        if result.outcome in ("stuck", "no_path"):
+            self._failed_options.add(opt.key)
+        else:
+            self._failed_options.discard(opt.key)
         if opt.kind in ("warp", "exit") and result.outcome == "warped":
             if opt.key not in self.memory.links:
                 self._discovered()
