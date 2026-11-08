@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-# After the first two badges these are only occasional nudges. Index = number of badges.
+# What to do after the first two badges. Index = number of badges.
 BY_BADGES = [
     "",
     "",
@@ -41,12 +41,14 @@ ROUTE = {
     THROUGH_FOREST: {"Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
                      "Route 2": "north"},
     BROCK: {"Route 2": "north", "Pewter City": "Pewter City - Gym"},
+    TO_ROUTE_3: {"Pewter City": "east", "Route 3": "east", "Route 4": "Mt Moon"},
+    MISTY: {"Route 4": "east", "Cerulean City": "Cerulean City - Gym"},
 }
 
 
 # The buildings where a step's job gets done, by the game's full map names.
 DESTINATIONS = {GET_PARCEL: "Viridian City - Mart", PARCEL: "Pallet Town - Professor Oak's Lab",
-                BROCK: "Pewter City - Gym"}
+                BROCK: "Pewter City - Gym", MISTY: "Cerulean City - Gym"}
 
 
 def target_for(step: str, place: str) -> str:

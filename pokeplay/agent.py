@@ -93,7 +93,6 @@ class Agent:
         self._failed_options: set[str] = set()      # map actions that just didn't work
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
-        self._hint_clock = -1
         self._came_from = ""                        # the place she was in before this one
         self._decisions_here = 0
         self._snapshot: dict | None = None          # what she last knew about, to spot what changed
@@ -603,9 +602,7 @@ class Agent:
         if self._team_badly_hurt(s):
             parts.append("YOUR TEAM IS BADLY HURT: go to the nearest Pokémon Center and talk to the person at the "
                          "counter, or go home and talk to Mom, before doing anything else.")
-        self._hint_clock += 1
-        if s.badges < GUIDED_UNTIL_BADGES or self._hint_clock % HINT_EVERY < HINT_LASTS:
-            parts.append("YOUR NEXT STEP (do this): " + self._next_step(s))
+        parts.append("YOUR NEXT STEP (do this): " + self._next_step(s))
         if self._actions_since_discovery >= 8:
             parts.append(f"You've done {self._actions_since_discovery} things in a row without discovering "
                          "anything new.")
@@ -722,9 +719,7 @@ class Agent:
         return hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered)
 
     def _follow_route(self, options: list, s: GameState) -> list:
-        """In the guided opening, the exit or door for her next step is the one she takes. [] if there isn't one."""
-        if s.badges >= GUIDED_UNTIL_BADGES:
-            return []
+        """Where a route is known, the exit or door for her next step is the one she takes. [] if there isn't one."""
         step = self._next_step(s)
         if arrived(step, s.map_name):                   # in the right place: stay and talk to people, least-tried first
             people = [o for o in options if o.kind == "talk"]
@@ -798,7 +793,7 @@ class Agent:
         self.overlay.update(location=s.map_name, badges=s.badges, money=s.money)
         self._maybe_reflect(s)
 
-        self.world.show_destinations = s.badges < GUIDED_UNTIL_BADGES
+        self.world.show_destinations = True
         options, _grid = self.world.build_options(s)
         if not options:
             self.history.append("Couldn't find anywhere to go, wiggling around.")

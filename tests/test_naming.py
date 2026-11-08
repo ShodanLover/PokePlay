@@ -623,7 +623,8 @@ def test_route_targets_for_the_opening():
     assert h.target_for(h.PARCEL, "Pallet Town - Professor Oak's Lab") == ""           # arrived, so she stays
     assert h.target_for(h.THROUGH_FOREST, "Route 2") == "north"                        # passing through, not arrived
     assert h.target_for(h.TO_VIRIDIAN, "Pallet Town - Player's House - 2F") == "Pallet Town"
-    assert h.target_for(h.MISTY, "Cerulean City") == ""                                # no set route here
+    assert h.target_for(h.MISTY, "Cerulean City") == "Cerulean City - Gym"
+    assert h.target_for(h.THROUGH_MT_MOON, "Mt Moon - 1F") == ""                       # caves are left to her
 
 
 def test_she_takes_the_door_for_her_next_step(tmp_path):
