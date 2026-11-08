@@ -326,7 +326,8 @@ class Brain:
         if kind == "player":          # otherwise "You are <old name>" makes her just pick that again
             system = system.replace(self.name, "a new streamer who hasn't picked a name yet")
         rejected = ""
-        for _ in range(3 if kind == "player" else 1):
+        no_game_names = kind in ("player", "rival", "nickname", "caught")     # a first-timer wouldn't know them
+        for _ in range(3 if no_game_names else 1):
             messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt + rejected}]
             try:
                 data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
@@ -334,7 +335,7 @@ class Brain:
                 print(f"[brain] naming failed: {e}")
                 return "", ""
             name = str(data.get("name", "")).strip()
-            if kind == "player" and looks_pokemon_derived(name):
+            if no_game_names and looks_pokemon_derived(name):
                 print(f"[brain] '{name}' sounds like it came from Pokémon; asking again")
                 rejected = f" You can't use '{name}'. Pick something completely different, with nothing from Pokémon in it."
                 continue

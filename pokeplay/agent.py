@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import difflib
 import json
 import queue
 import threading
@@ -573,7 +574,7 @@ class Agent:
         self.overlay.log(f"▶ {action_label}")
         if d.say and not self.narrator.is_speaking():   # thinking doesn't have to mean talking
             self._speak(d.say)
-        if d.note and not GUESSWORK.search(d.note):
+        if d.note and self._worth_noting(d.note):
             self.memory.add_journal(d.note)
         if d.goal:
             self.memory.goal = d.goal[:200]
@@ -589,12 +590,27 @@ class Agent:
             self.memory.goal = r["goal"][:200]
         if r.get("mood"):
             self.memory.mood = r["mood"][:40]
-        if r.get("journal") and not GUESSWORK.search(r["journal"]):
+        if r.get("journal") and self._worth_noting(r["journal"]):
             self.memory.add_journal(r["journal"])
         if len(self.memory.journal) > JOURNAL_LIMIT:
             self.memory.journal = self.brain.condense(self.memory.journal)
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         self.memory.save()
+
+    def _record_outcome(self, key: str, outcome: str) -> None:
+        """If something couldn't be done at all (like walking into water), stop offering it for a while."""
+        if outcome in ("stuck", "no_path"):
+            self._failed_options.add(key)
+            self._worn_out[key] = REST_DECISIONS
+        else:
+            self._failed_options.discard(key)
+
+    def _worth_noting(self, note: str) -> bool:
+        """Her journal is for new facts: guesses and near-copies of recent notes make her talk in circles."""
+        if GUESSWORK.search(note):
+            return False
+        return not any(difflib.SequenceMatcher(None, note.lower(), old.lower()).ratio() > 0.6
+                       for old in self.memory.journal[-15:])
 
     def _note_pick(self, key: str) -> None:
         """Doing the same thing again and again means it isn't working, wherever she is in the game."""
@@ -664,10 +680,7 @@ class Agent:
             self._talking_to = opt.key
         result = self.world.execute(opt, s)
         self.memory.bump("steps", self.world.steps_taken - steps_before)
-        if result.outcome in ("stuck", "no_path"):
-            self._failed_options.add(opt.key)
-        else:
-            self._failed_options.discard(opt.key)
+        self._record_outcome(opt.key, result.outcome)
         if opt.kind in ("warp", "exit") and result.outcome == "warped":
             if opt.key not in self.memory.links:
                 self._discovered()

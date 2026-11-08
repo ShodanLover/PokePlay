@@ -416,6 +416,33 @@ def test_headline_is_an_occasional_aside(monkeypatch):
     assert "Team" not in b._system()                        # never part of how she decides
 
 
+def test_impossible_actions_stop_being_offered(tmp_path):
+    from types import SimpleNamespace as Opt
+
+    agent, _ = _named_agent(tmp_path)
+    south, north = Opt(key="south"), Opt(key="north")
+    agent._record_outcome("south", "stuck")
+    assert agent._drop_worn_out([south, north]) == [north]      # gone after one failure, not three
+    agent._record_outcome("north", "warped")
+    assert agent._drop_worn_out([south, north]) == [north]
+
+
+def test_near_copies_stay_out_of_her_journal(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.journal.append("A patch of grass appeared near the northwest corner of the room.")
+    assert not agent._worth_noting("A grass patch appeared near the northwest corner of the room.")
+    assert agent._worth_noting("The man by the fence sells potions.")
+
+
+def test_nicknames_are_not_pokemon_names():
+    from pokeplay.brain import Brain
+
+    b = Brain("http://x", "m")
+    replies = iter(['{"name": "Pikachu", "say": "no"}', '{"name": "Sprout", "say": "yes"}'])
+    b._chat = lambda messages, **k: next(replies)
+    assert b.choose_name("nickname", 10, "BULBASAUR") == ("Sprout", "yes")
+
+
 def test_guesses_stay_out_of_her_journal(tmp_path):
     from pokeplay.brain import Decision
 
