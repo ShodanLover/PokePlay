@@ -18,6 +18,7 @@ from .memory import Memory
 from .menus import Menu, MenuReader
 from .naming import MAX_CHARS, NamingScreen, clean_name
 from .narrator import Narrator
+from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
 from .overworld import Overworld
 
@@ -46,6 +47,8 @@ class Agent:
         self.overlay = OverlayState()
         self.overlay.update(twitch_channel=cfg.overlay.twitch_channel.strip().lower().rsplit("/", 1)[-1].lstrip("#"))
         self.brain.obsession = cfg.brain.obsession
+        self.news = Headlines(cfg.brain.news_feeds)
+        self.brain.headlines = self.news.take
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
@@ -104,6 +107,7 @@ class Agent:
         self.memory.bump("sessions")
         self.memory.save()
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
+        self.news.start()
         if self.cfg.commentary.enabled:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
 

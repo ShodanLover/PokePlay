@@ -117,6 +117,7 @@ def _opening(text: str) -> tuple[str, ...]:
 
 OBSESSION_CHANCE = 0.05     # how often a spoken comment includes her running bit (1 in 20)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
+NEWS_CHANCE = 0.05          # how often a spoken comment remarks on a real headline (1 in 20)
 
 # Words she leaned on until they got old. Lines using them are thought, not said.
 OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b|\bglitch", re.I)
@@ -162,6 +163,7 @@ class Brain:
         self.style = DEFAULT_STYLE
         self.catchphrase = ""
         self.obsession = ""             # an occasional running bit (config: obsession)
+        self.headlines = None           # function returning a real headline to remark on, or ""
         self.recent_said: collections.deque[str] = collections.deque(maxlen=30)
         self.temperature = temperature
         self.context_tokens = context_tokens
@@ -389,12 +391,23 @@ class Brain:
             return ""
         return f"Work in a quick mention of {self.obsession}'s basketball career, keeping it light. "
 
+    def _headline_line(self) -> str:
+        """Now and then, a real headline to remark on (her model doesn't know the news and would invent it)."""
+        if not self.headlines or random.random() > NEWS_CHANCE:
+            return ""
+        headline = self.headlines().replace('"', "'")
+        if not headline:
+            return ""
+        return (f'You happened to see this headline today: "{headline}". Treat it only as a piece of news, and '
+                "make a quick, light remark about it, using only what it says. Don't insult anyone or tell people "
+                "who to vote for. ")
+
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
             f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to yourself in one or two short spoken sentences (under 35 words total). "
             "No emojis, no hashtags, no quotation marks. "
-            + self._obsession_line()
+            + (self._headline_line() or self._obsession_line())
             + 'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
         )
         messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]

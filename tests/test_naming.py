@@ -363,6 +363,40 @@ def test_running_joke_is_only_occasional(monkeypatch):
     assert b._obsession_line() == ""                        # most lines don't mention it at all
 
 
+def test_headline_filter_allows_politics_but_not_the_worst():
+    from pokeplay.news import MAX_HEADLINES, Headlines, parse_headlines
+
+    feed = b"""<rss><channel>
+      <item><title>Team wins cup after dramatic final</title></item>
+      <item><title>Man killed in city centre attack</title></item>
+      <item><title>Minister faces questions over budget</title></item>
+      <item><title>Star convicted after long case</title></item>
+      <item><title>Watch the Trailer</title></item>
+    </channel></rss>"""
+    titles = parse_headlines(feed)
+    assert titles == ["Team wins cup after dramatic final", "Minister faces questions over budget"]
+
+    news = Headlines([])
+    news.add(titles + titles)                               # the same story never comes up twice
+    assert {news.take(), news.take()} == set(titles) and news.take() == ""
+
+    news.add([f"Story number {i} happened today" for i in range(100)])
+    assert sum(1 for _ in iter(news.take, "")) == MAX_HEADLINES
+
+
+def test_headline_is_an_occasional_aside(monkeypatch):
+    from pokeplay import brain as br
+
+    b = br.Brain("http://x", "m")
+    assert b._headline_line() == ""                         # off unless there's a source
+    b.headlines = lambda: 'Team "wins" cup'
+    monkeypatch.setattr(br.random, "random", lambda: 0.9)
+    assert b._headline_line() == ""                         # most lines don't mention it
+    monkeypatch.setattr(br.random, "random", lambda: 0.0)
+    assert "Team 'wins' cup" in b._headline_line()
+    assert "Team" not in b._system()                        # never part of how she decides
+
+
 def test_guesses_stay_out_of_her_journal(tmp_path):
     from pokeplay.brain import Decision
 
