@@ -90,9 +90,8 @@ DEFAULT_STYLE = (
     "things like 'I'm so chaotic' or 'chaos mode'), don't narrate your own actions in asterisks, don't "
     "overuse exclamation marks or the word 'chat', and don't force catchphrases. Never say 'ugh', 'chaos' "
     "or 'chaotic'. Be more unhinged than a normal streamer: sudden strange tangents, mock-dramatic overreactions, "
-    "talking to objects as if they're people. You're in a messy, dramatic, on-again-off-again romance with doors, "
-    "and you bring up the drama. You're also a shameless flirt, but only with inanimate things like "
-    "doors, signs, shop shelves and items, in a silly, PG way. Never flirt with any person or creature in the game, "
+    "talking to objects as if they're people. You're also a shameless flirt, but only with inanimate things, "
+    "in a silly way, and never the same thing twice. Never flirt with any person or creature in the game, "
     "and never say anything sexual. Swear freely for comic effect, aimed at objects, the game and your own bad "
     "luck, never at a person or creature in the game."
 )
@@ -134,19 +133,29 @@ COMEDY_ANGLES = [
     "someone deeply suspicious of whatever is nearest", "someone taking this as a personal insult",
     "a business pitch nobody asked for", "a flirty line to the nearest inanimate object",
     "a love confession to a piece of furniture or scenery", "a game show host", "an auctioneer",
-    "a shameless pickup line aimed at a nearby sign or door", "someone swooning over a shop shelf",
-    "a jealous lover accusing a door of seeing other people", "a wedding proposal to the nearest tree",
+    "a shameless pickup line aimed at your random subject", "someone swooning over your random subject",
+    "a jealous lover accusing your random subject of seeing other people", "a wedding proposal to your random subject",
     "someone completely losing the plot, mid-sentence", "a prophet receiving visions from the grass",
     "someone arguing with the voices in their inventory", "a screaming sales pitch for doing absolutely nothing",
-    "a dramatic breakup speech to a door", "getting back together with a door you swore you were done with",
-    "bragging that a door texted you first", "a wild accusation that the grass knows what you did",
+    "a dramatic breakup speech to your random subject", "getting back together with your random subject",
+    "bragging that your random subject texted you first", "a wild accusation that your random subject knows what you did",
     "a confession you were never supposed to say out loud", "a sudden, furious rant about something tiny",
     "announcing your villain origin story, triggered by this", "a furious, cursing rant at a piece of furniture",
-    "someone swearing at the concept of grass", "a foul-mouthed motivational coach yelling at a door",
+    "someone swearing at the very concept of your random subject", "a foul-mouthed motivational coach yelling at your random subject",
     "a pirate who is new to the job", "an overly formal butler", "someone giving terrible life advice based on this",
 ]
 
-COMMENT_TEMPERATURE = 1.25  # wilder than her decisions, which stay at the normal setting
+COMMENT_TEMPERATURE = 1.35  # wilder than her decisions, which stay at the normal setting
+
+# A different thing to riff on each line. Without this, a small model finds one joke and never lets go.
+RANDOM_SUBJECTS = [
+    "a traffic cone", "a ceiling fan", "a stapler", "the moon", "tax season", "a shopping cart", "a garden hose",
+    "soup", "a filing cabinet", "a goose", "a lawnmower", "wet socks", "a vending machine", "the concept of Tuesday",
+    "a bowling ball", "a jar of pickles", "a tiny umbrella", "your dentist", "a broken escalator", "a kazoo",
+    "a haunted spoon", "a suspicious ham", "the DMV", "a hot air balloon", "a rubber duck", "a parking meter",
+    "a lava lamp", "a wheelbarrow", "a very old cheese", "a bagpipe", "a smoke detector", "a trombone",
+    "a mattress store", "a lost mitten", "a fax machine", "a canoe", "gravity", "a clipboard", "a disco ball", "a llama",
+]
 
 # She runs unattended on a public stream in a game full of child characters, at a high randomness setting.
 NOT_FOR_STREAM = re.compile(
@@ -203,6 +212,7 @@ class Brain:
         self.obsession = ""             # an occasional running bit (config: obsession)
         self.headlines = None           # function returning a real headline to remark on, or ""
         self._angles: list[str] = []    # comedic styles left before the list reshuffles
+        self._subjects: list[str] = []  # random things to riff on, likewise
         self.recent_said: collections.deque[str] = collections.deque(maxlen=30)
         self.temperature = temperature
         self.context_tokens = context_tokens
@@ -266,27 +276,19 @@ class Brain:
             + SAFETY
         )
 
-    def _recent_block(self) -> str:
-        if not self.recent_said:
-            return ""
-        worn = self.worn_topics()
-        return ("\n\nTHINGS YOU SAID OUT LOUD RECENTLY (say something fresh: don't reuse these phrases, "
-                "jokes or sentence openings):\n" + "\n".join(f'- "{s}"' for s in list(self.recent_said)[-10:])
-                + (f"\n\nYOU'VE SAID THESE WORDS TOO MUCH, SO DON'T USE THEM NOW: {', '.join(sorted(worn))}" if worn else ""))
-
-    def worn_topics(self) -> set[str]:
-        """Distinctive words in at least 3 of her last 6 spoken lines: she's been going on about these."""
+    def worn_topics(self, at_least: int = 2) -> set[str]:
+        """Distinctive words already in several of her last 12 spoken lines: she's been going on about these."""
         counts: collections.Counter[str] = collections.Counter()
-        for said in list(self.recent_said)[-6:]:
+        for said in list(self.recent_said)[-12:]:
             counts.update({w for w in _words(said) if len(w) >= 4 and w not in COMMON_WORDS})
-        return {word for word, times in counts.items() if times >= 3}
+        return {word for word, times in counts.items() if times >= at_least}
 
     def is_repeat(self, text: str, lenient: bool = False) -> bool:
         """True if this line is basically something she just said. Lenient only rejects near-copies."""
         t = text.lower()
         if lenient:
-            return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.6
-                       for old in list(self.recent_said)[-8:])
+            return bool(set(_words(text)) & self.worn_topics(3)) or any(
+                difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.6 for old in list(self.recent_said)[-8:])
         if set(_words(text)) & self.worn_topics():
             return True
         phrases, opening = _phrases(text), _opening(text)
@@ -301,7 +303,7 @@ class Brain:
     def decide(self, context: str, option_lines: list[str]) -> Decision:
         numbered = "\n".join(f"{i + 1}. {line}" for i, line in enumerate(option_lines))
         prompt = (
-            f"{context}{self._recent_block()}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
+            f"{context}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
             "Reply with JSON only: "
             '{"thought": "your reasoning, 1-2 sentences", '
             '"say": "one short spoken sentence, under 15 words, about what is happening right now, not about things '
@@ -444,6 +446,11 @@ class Brain:
             return ""
         return f"Work in a quick mention of {self.obsession}'s basketball career, keeping it light. "
 
+    def _next_subject(self) -> str:
+        if not self._subjects:
+            self._subjects = random.sample(RANDOM_SUBJECTS, len(RANDOM_SUBJECTS))
+        return self._subjects.pop()
+
     def _next_angle(self) -> str:
         """A different comedic style for each line, using them all before any comes up again."""
         if not self._angles:
@@ -467,7 +474,8 @@ class Brain:
             f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Be absolutely, gloriously unhinged and funny: the weirdest thing anyone could say here. "
             "Curse if it makes it funnier. "
-            f"Deliver this line in this style: {self._next_angle()}. Keep it about what actually happened. "
+            f"Deliver this line in this style: {self._next_angle()}. Your random subject for this line: "
+            f"{self._next_subject()}. Connect it to what actually happened. "
             "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())
             + 'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'

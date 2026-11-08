@@ -46,6 +46,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Tone update (owner's request):** very unhinged, swearing allowed, and flirty. The flirting stays non-sexual and aimed
   only at inanimate things, and sexual content stays filtered (`NOT_FOR_STREAM`): the game's human characters are
   children and it runs unattended on a public stream. No slurs, hate or harassment.
+- **Variety:** don't name specific objects in her prompts or show her recent lines: a small model parrots both ("winking
+  doors"). Each comment gets a random style and subject (`COMEDY_ANGLES`, `RANDOM_SUBJECTS`) and overused words are blocked.
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
 - **Voice:** Kokoro **`af_heart`** (installed via `python -m pokeplay --get-voice kokoro:af_heart`).
   Voice volume ~80-85; the game volume is turned down in the Windows volume mixer.

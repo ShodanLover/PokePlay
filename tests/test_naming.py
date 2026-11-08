@@ -443,10 +443,10 @@ def test_overused_words_are_named_and_blocked():
     b = Brain("http://x", "m")
     for line in ("My turnip is weird.", "Still thinking about that turnip.", "One more turnip thought."):
         b.remember_said(line)
-    assert b.worn_topics() == {"turnip"} and "DON'T USE THEM NOW: turnip" in b._recent_block()
+    assert b.worn_topics() == {"turnip"}
     assert b.is_repeat("That turnip again, honestly.")
     assert not b.is_repeat("There's a sign by the fence over here.")
-    assert not b.is_repeat("That turnip again, honestly.", lenient=True)    # silence is worse than a worn word
+    assert b.is_repeat("That turnip again, honestly.", lenient=True)        # even after a long silence
 
 
 def test_lines_that_waited_too_long_are_not_said():
@@ -738,7 +738,6 @@ def test_repeats_are_filtered():
     b.remember_said("Happy Monday, chaos gremlins! Let's do this!")
     assert b.is_repeat("Happy Monday chaos gremlins, let's do this!")
     assert not b.is_repeat("Ooh, a door. What could possibly go wrong?")
-    assert "Happy Monday" in b._recent_block()
 
 
 def test_reused_phrases_and_openings_count_as_repeats():
@@ -751,7 +750,7 @@ def test_reused_phrases_and_openings_count_as_repeats():
     assert not b.is_repeat("I think I need to talk to that person by the fence.")
     for i in range(29):
         b.remember_said(f"filler {i}")
-    assert any("Blinking" in s for s in b.recent_said) and "Blinking" not in b._recent_block()   # prompt stays short
+    assert any("Blinking" in s for s in b.recent_said)      # remembered well past her last few lines
 
 
 def test_clean_spoken_removes_name_labels():
