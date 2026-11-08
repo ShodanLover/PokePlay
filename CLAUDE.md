@@ -23,7 +23,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   Guesses ("might", "maybe") are not saved to her journal, since she re-reads them as facts.
 - **Running joke (owner's request):** `obsession` in `config.toml` is LeBron James. It only affects what she says,
   never her decisions. The owner wants it only every now and then, and it must stay about his public basketball career.
-- **Real headlines (owner's request):** `news_feeds` in `config.toml`, 1 in 8 comments from a random pool of 40, speech
+- **Real headlines (owner's request):** `news_feeds` in `config.toml`, 1 in 10 comments from a random pool of 40, speech
   only; she should mostly talk about the game. Politics is allowed. She says these live and unattended, so `UNSUITABLE`
   in `news.py` keeps out violence, crime, sexual content, death and illness.
 - **Nothing scripted except safety rules.** All speech is generated live. The only fixed rules are

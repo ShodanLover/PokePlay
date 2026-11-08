@@ -115,9 +115,9 @@ def _opening(text: str) -> tuple[str, ...]:
     return first if len(first) == 2 and not set(first) & COMMON_WORDS else ()
 
 
-OBSESSION_CHANCE = 0.125    # how often a spoken comment includes her running bit (1 in 8)
+OBSESSION_CHANCE = 0.1      # how often a spoken comment includes her running bit (1 in 10)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
-NEWS_CHANCE = 0.125         # how often a spoken comment remarks on a real headline (1 in 8)
+NEWS_CHANCE = 0.1           # how often a spoken comment remarks on a real headline (1 in 10)
 
 # Words she leaned on until they got old. Lines using them are thought, not said.
 OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b|\bglitch", re.I)
