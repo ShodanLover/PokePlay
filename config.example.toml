@@ -1,0 +1,32 @@
+# PokePlay settings. Copy this file to config.toml and edit it.
+
+[emulator]
+host = "127.0.0.1"
+port = 8888               # must match PORT in lua/pokeplay_bridge.lua
+autosave_minutes = 10     # make an mGBA save state this often (0 = off)
+autosave_slot = 9         # mGBA save state slot 1-9
+
+[brain]
+ollama_url = "http://127.0.0.1:11434"
+# qwen3:4b fits easily on a 6 GB card (GTX 1660 / 1660 Ti) alongside OBS.
+# If you have more VRAM free, try "qwen3:8b" for smarter play.
+model = "qwen3:4b"
+temperature = 0.7
+context_tokens = 4096
+streamer_name = "PokePlay AI"   # what the AI calls itself on stream
+
+[voice]
+# "windows" = built-in Windows voice (nothing to install)
+# "piper"   = free neural voice that sounds much better (see README)
+# "none"    = no voice, text on the overlay only
+engine = "windows"
+piper_model = ""          # e.g. "voices/en_US-lessac-medium.onnx" when engine = "piper"
+rate = 1                  # Windows voice speed, -10 (slow) to 10 (fast)
+wait_for_voice = true     # finish talking before choosing the next action
+
+[overlay]
+port = 8765               # OBS Browser Source URL: http://127.0.0.1:8765
+
+[commentary]
+enabled = true            # react out loud to battles, level ups, etc.
+min_seconds_between = 8

@@ -1,0 +1,8 @@
+# PokePlay itself only needs Python 3.11+ (standard library).
+
+# Optional: nicer free voice (set [voice] engine = "piper" in config.toml)
+# piper-tts
+
+# Optional: for running the tests
+# pytest
+# lupa

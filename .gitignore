@@ -1,0 +1,19 @@
+# Your own settings
+config.toml
+
+# Never commit game files
+*.gba
+*.sav
+*.ss[0-9]
+*.state
+roms/
+
+# Voices (large downloads)
+voices/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/

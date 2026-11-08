@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PokePlay Overlay</title>
+<style>
+  /* Designed for a 1920x1080 OBS canvas: put the game on the left, this panel on the right. */
+  :root {
+    --bg: rgba(14, 18, 28, 0.86);
+    --edge: rgba(255, 255, 255, 0.10);
+    --text: #f2f4f8;
+    --muted: #9aa4b8;
+    --accent: #ffcb3d;
+    --hp-good: #3ddc84;
+    --hp-mid: #ffb02e;
+    --hp-low: #ff5a5f;
+  }
+  html, body { margin: 0; background: transparent; color: var(--text);
+    font-family: "Segoe UI", system-ui, sans-serif; overflow: hidden; }
+  .wrap { position: absolute; top: 24px; right: 24px; width: 560px; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--bg); border: 1px solid var(--edge); border-radius: 14px; padding: 16px 20px; }
+  .label { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  #say { font-size: 30px; line-height: 1.25; font-weight: 600; min-height: 76px; }
+  #say .cursor { display: inline-block; width: 3px; height: 1em; background: var(--accent); margin-left: 3px;
+    vertical-align: -0.15em; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  #thought { font-size: 19px; color: #cfd5e2; font-style: italic; margin-top: 10px; }
+  #objective { font-size: 18px; line-height: 1.35; }
+  .row { display: flex; gap: 18px; font-size: 18px; }
+  .row b { color: var(--accent); }
+  .mon { display: grid; grid-template-columns: 1fr 120px; gap: 2px 12px; margin: 8px 0; font-size: 18px; }
+  .mon .name { font-weight: 600; }
+  .mon .lv { text-align: right; color: var(--muted); }
+  .bar { grid-column: 1 / 3; height: 8px; background: rgba(255,255,255,.12); border-radius: 4px; overflow: hidden; }
+  .bar > div { height: 100%; transition: width .4s ease; }
+  #log { font-size: 16px; color: var(--muted); margin: 0; padding-left: 18px; }
+  #log li { margin: 3px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="label">AI is thinking</div>
+    <div id="say"></div>
+    <div id="thought"></div>
+  </div>
+  <div class="card">
+    <div class="label">Current goal</div>
+    <div id="objective"></div>
+  </div>
+  <div class="card">
+    <div class="row"><span>📍 <b id="location"></b></span></div>
+    <div class="row" style="margin-top:6px"><span>Badges <b id="badges">0</b>/8</span><span>Money <b id="money">0</b></span></div>
+  </div>
+  <div class="card">
+    <div class="label">Team</div>
+    <div id="party"></div>
+  </div>
+  <div class="card">
+    <div class="label">Recent</div>
+    <ul id="log"></ul>
+  </div>
+</div>
+<script>
+  let shown = "", target = "";
+  function typeTick() {
+    if (shown !== target) {
+      shown = target.startsWith(shown) ? target.slice(0, shown.length + 1) : "";
+      const el = document.getElementById("say");
+      el.textContent = shown;
+      const c = document.createElement("span"); c.className = "cursor"; el.appendChild(c);
+    }
+  }
+  setInterval(typeTick, 28);
+
+  function hpColor(f) { return f > 0.5 ? "var(--hp-good)" : f > 0.2 ? "var(--hp-mid)" : "var(--hp-low)"; }
+
+  async function refresh() {
+    try {
+      const s = await (await fetch("/state.json", { cache: "no-store" })).json();
+      target = s.say || "";
+      document.getElementById("thought").textContent = s.thought || "";
+      document.getElementById("objective").textContent = s.objective || "";
+      document.getElementById("location").textContent = s.location || "";
+      document.getElementById("badges").textContent = s.badges ?? 0;
+      document.getElementById("money").textContent = "₽" + (s.money ?? 0).toLocaleString();
+      const party = document.getElementById("party");
+      party.replaceChildren(...(s.party || []).map(m => {
+        const d = document.createElement("div"); d.className = "mon";
+        const f = m.max_hp ? m.hp / m.max_hp : 0;
+        d.innerHTML = `<span class="name"></span><span class="lv"></span><div class="bar"><div></div></div>`;
+        d.querySelector(".name").textContent = m.name + (m.status ? " · " + m.status : "");
+        d.querySelector(".lv").textContent = `Lv ${m.level} · ${m.hp}/${m.max_hp}`;
+        const b = d.querySelector(".bar > div"); b.style.width = (f * 100) + "%"; b.style.background = hpColor(f);
+        return d;
+      }));
+      const log = document.getElementById("log");
+      log.replaceChildren(...(s.log || []).slice().reverse().map(t => {
+        const li = document.createElement("li"); li.textContent = t; return li;
+      }));
+    } catch (e) { /* agent not running yet */ }
+  }
+  setInterval(refresh, 500);
+  refresh();
+</script>
+</body>
+</html>
