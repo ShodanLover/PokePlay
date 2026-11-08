@@ -243,6 +243,25 @@ def test_questions_the_game_asks_are_never_cut_off(tmp_path):
     assert agent.pressed == [] and not agent._leaving_menus and len(agent.prompts) == 5
 
 
+def test_subtitle_appears_when_the_audio_starts(monkeypatch):
+    import numpy as np
+    from pokeplay import narrator as nar
+
+    events = []
+
+    class FakeKokoro:
+        def create(self, text, **kw):
+            events.append("generated")
+            return np.zeros(10, dtype=float), 24000
+
+    monkeypatch.setattr(nar, "_play_wav", lambda path: events.append("audio"))
+    n = nar.Narrator("kokoro", on_speak=lambda text: events.append(f"subtitle: {text}"))
+    n._kokoro = FakeKokoro()
+    n.say("My first Pokémon")
+    n.wait_until_quiet(5)
+    assert events == ["generated", "subtitle: My first Pokémon", "audio"]     # real spelling on screen
+
+
 def test_speak_reports_whether_she_said_it(tmp_path):
     agent, _ = _named_agent(tmp_path)
     agent.narrator.say = lambda text: None

@@ -45,6 +45,7 @@ class Narrator:
         self.kokoro_voice = kokoro_voice
         self.speed = speed
         self._kokoro = None
+        self._subtitle = ""
         self.last_spoke = time.time()
         self._q: queue.Queue[str] = queue.Queue()
         self._max_queue = max_queue
@@ -79,17 +80,18 @@ class Narrator:
             self._busy.set()
             try:
                 self.last_spoke = time.time()
-                if self.on_speak:
-                    self.on_speak(text)
+                self._subtitle = text           # shown when the audio starts, not while it's being generated
                 print(f"[voice] {text}")
                 text = pronounceable(text)
                 if self.engine == "windows":
+                    self._show_subtitle()
                     self._speak_windows(text)
                 elif self.engine == "piper":
                     self._speak_piper(text)
                 elif self.engine == "kokoro":
                     self._speak_kokoro(text)
                 else:
+                    self._show_subtitle()
                     time.sleep(min(6.0, 0.06 * len(text)))   # give viewers time to read it
             except Exception as e:  # noqa: BLE001
                 print(f"[voice] error: {e}")
@@ -101,6 +103,11 @@ class Narrator:
                     except Exception:  # noqa: BLE001
                         pass
                 self._busy.clear()
+
+    def _show_subtitle(self) -> None:
+        self.last_spoke = time.time()
+        if self.on_speak:
+            self.on_speak(self._subtitle)
 
     def _speak_windows(self, text: str) -> None:
         if sys.platform != "win32":
@@ -138,6 +145,7 @@ class Narrator:
                 w.setsampwidth(2)
                 w.setframerate(rate)
                 w.writeframes(pcm.tobytes())
+            self._show_subtitle()
             _play_wav(path)
         finally:
             try:
@@ -157,6 +165,7 @@ class Narrator:
             else:
                 self._synthesize_with_module(text, path)
             _scale_volume(path, self.volume)
+            self._show_subtitle()
             _play_wav(path)
         finally:
             try:
