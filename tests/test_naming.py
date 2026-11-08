@@ -151,3 +151,25 @@ def test_clean_spoken_more_label_styles():
     from pokeplay.brain import clean_spoken
     assert clean_spoken("PikaPunch says: 'Ugh, so confusing!'", "PikaPunch") == "Ugh, so confusing!"
     assert clean_spoken('**PikaPunch** yells: "A DOOR!"', "PikaPunch") == "A DOOR!"
+
+
+def test_she_fills_long_silences(tmp_path):
+    import threading
+    import time
+    from pokeplay.agent import Agent
+    from pokeplay.config import Config
+
+    cfg = Config()
+    cfg.voice.engine = "none"
+    cfg.brain.memory_file = str(tmp_path / "memory.json")
+    cfg.commentary.max_silence_seconds = 1
+    agent = Agent(cfg)
+    agent._context = "WHERE YOU ARE: a forest."
+    agent._activity = "walking north through the forest"
+    asked = []
+    agent.brain.comment = lambda events, ctx: asked.append(events[0]) or "These trees all look the same."
+    agent.narrator.last_spoke = time.time() - 5
+    threading.Thread(target=agent._commentary_worker, daemon=True).start()
+    time.sleep(3)
+    assert asked and "walking north through the forest" in asked[0]
+    assert "These trees all look the same." in agent.brain.recent_said

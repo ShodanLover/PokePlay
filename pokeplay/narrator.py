@@ -13,6 +13,7 @@ import queue
 import subprocess
 import sys
 import tempfile
+import array
 import threading
 import time
 import wave
@@ -20,7 +21,8 @@ import wave
 
 class Narrator:
     def __init__(self, engine: str = "windows", piper_model: str = "", rate: int = 0,
-                 max_queue: int = 3, on_speak=None, on_done=None, gender: str = "female", volume: int = 100):
+                 max_queue: int = 3, on_speak=None, on_done=None, gender: str = "female", volume: int = 100,
+                 voice_name: str = "", piper_exe: str = "piper/piper.exe"):
         self.engine = engine
         self.piper_model = piper_model
         self.rate = rate
@@ -28,6 +30,9 @@ class Narrator:
         self.on_done = on_done        # callback() when it finishes (clears subtitles)
         self.gender = gender
         self.volume = max(0, min(100, int(volume)))
+        self.voice_name = voice_name
+        self.piper_exe = piper_exe
+        self.last_spoke = time.time()
         self._q: queue.Queue[str] = queue.Queue()
         self._max_queue = max_queue
         self._busy = threading.Event()
@@ -60,6 +65,7 @@ class Narrator:
             text = self._q.get()
             self._busy.set()
             try:
+                self.last_spoke = time.time()
                 if self.on_speak:
                     self.on_speak(text)
                 print(f"[voice] {text}")
@@ -72,6 +78,7 @@ class Narrator:
             except Exception as e:  # noqa: BLE001
                 print(f"[voice] error: {e}")
             finally:
+                self.last_spoke = time.time()
                 if self.on_done and self._q.empty():
                     try:
                         self.on_done()
@@ -83,36 +90,73 @@ class Narrator:
         if sys.platform != "win32":
             time.sleep(min(6.0, 0.06 * len(text)))
             return
+        if self.voice_name:
+            pick = f"try {{ $s.SelectVoice('{self.voice_name.replace(chr(39), '')}') }} catch {{}}; "
+        else:
+            hint = "Male" if self.gender.lower() == "male" else "Female"
+            pick = f"try {{ $s.SelectVoiceByHints('{hint}') }} catch {{}}; "
         script = (
             "Add-Type -AssemblyName System.Speech; "
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
             f"$s.Rate = {int(self.rate)}; $s.Volume = {self.volume}; "
-            f"try {{ $s.SelectVoiceByHints('{'Male' if self.gender.lower() == 'male' else 'Female'}') }} catch {{}}; "
-            "$s.Speak([Console]::In.ReadToEnd())"
+            + pick
+            + "$s.Speak([Console]::In.ReadToEnd())"
         )
         subprocess.run(["powershell", "-NoProfile", "-Command", script], input=text.encode("utf-8"),
                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), check=False)
 
     def _speak_piper(self, text: str) -> None:
-        if self._piper_voice is None:
-            from piper import PiperVoice  # pip install piper-tts
-            if not self.piper_model or not os.path.exists(self.piper_model):
-                raise RuntimeError(f"Piper voice model not found: {self.piper_model!r}")
-            self._piper_voice = PiperVoice.load(self.piper_model)
         fd, path = tempfile.mkstemp(suffix=".wav")
         os.close(fd)
         try:
-            with wave.open(path, "wb") as wav:
-                if hasattr(self._piper_voice, "synthesize_wav"):
-                    self._piper_voice.synthesize_wav(text, wav)
-                else:
-                    self._piper_voice.synthesize(text, wav)
+            if os.path.exists(self.piper_exe):
+                # Piper's standalone program: no Python packages needed.
+                subprocess.run([self.piper_exe, "--model", self.piper_model, "--output_file", path],
+                               input=text.encode("utf-8"), capture_output=True, check=True,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+            else:
+                self._synthesize_with_module(text, path)
+            _scale_volume(path, self.volume)
             _play_wav(path)
         finally:
             try:
                 os.remove(path)
             except OSError:
                 pass
+
+    def _synthesize_with_module(self, text: str, path: str) -> None:
+        if self._piper_voice is None:
+            from piper import PiperVoice  # pip install piper-tts
+            if not self.piper_model or not os.path.exists(self.piper_model):
+                raise RuntimeError(f"Piper voice model not found: {self.piper_model!r}")
+            self._piper_voice = PiperVoice.load(self.piper_model)
+        with wave.open(path, "wb") as wav:
+            if hasattr(self._piper_voice, "synthesize_wav"):
+                self._piper_voice.synthesize_wav(text, wav)
+            else:
+                self._piper_voice.synthesize(text, wav)
+
+
+def _scale_volume(path: str, volume: int) -> None:
+    """Make a 16-bit WAV file quieter (volume 0-100)."""
+    if volume >= 100:
+        return
+    with wave.open(path, "rb") as w:
+        params = w.getparams()
+        frames = w.readframes(w.getnframes())
+    if params.sampwidth != 2:
+        return
+    samples = array.array("h", frames)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    factor = volume / 100.0
+    for i in range(len(samples)):
+        samples[i] = int(samples[i] * factor)
+    if sys.byteorder == "big":
+        samples.byteswap()
+    with wave.open(path, "wb") as w:
+        w.setparams(params)
+        w.writeframes(samples.tobytes())
 
 
 def _play_wav(path: str) -> None:

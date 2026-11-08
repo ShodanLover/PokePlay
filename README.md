@@ -177,23 +177,39 @@ OBS's Desktop Audio records these per-app levels, so viewers hear the same balan
 volume itself is `volume` under `[voice]` in `config.toml` (0-100).
 5. Hit **Start Streaming**.
 
-### Better voice (optional, still free)
+### Changing her voice (free)
 
-The default Windows voice works but sounds robotic. **Piper** sounds much more natural:
+See what's available:
 
 ```bash
-pip install piper-tts
+python -m pokeplay --list-voices
 ```
 
-Download a voice (both the `.onnx` and `.onnx.json` files) from
-huggingface.co/rhasspy/piper-voices. Female English voices include `en/en_US/amy/medium`,
-`en/en_US/lessac/medium` and `en/en_GB/jenny_dioco/medium`. Put them in a `voices` folder, then in `config.toml`:
+**Better-sounding free voices (Piper).** Download one and switch to it with a single command, e.g.:
 
-```toml
-[voice]
-engine = "piper"
-piper_model = "voices/en_US-amy-medium.onnx"
+```bash
+python -m pokeplay --get-voice amy
 ```
+
+Choices: `amy`, `lessac`, `kristin`, `hfc`, `ljspeech` (American); `jenny`, `cori` (British); `alba`
+(Scottish). The first time, it also downloads the small Piper program (no extra Python packages needed).
+
+**Hear it before going live:**
+
+```bash
+python -m pokeplay --test-voice
+```
+
+**Volume and speed** are in `config.toml` under `[voice]`: `volume` (0-100) and, for the Windows
+voice, `rate`. To use a specific Windows voice, copy its name from `--list-voices` into `voice_name`.
+
+### Her personality
+
+- `persona.json` holds the name and personality she invented. You can edit the `personality` line
+  in Notepad, or delete the file to let her reinvent herself.
+- `speaking_style` in `config.toml` controls *how* she talks. Leave it empty for the built-in style
+  (casual, dry humor, no forced zaniness), or write your own description.
+- `temperature` controls how random she is: about 0.6 is calmer and more sensible, 0.9 is wilder.
 
 ---
 

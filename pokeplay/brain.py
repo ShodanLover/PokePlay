@@ -60,6 +60,16 @@ def clean_spoken(text: str, name: str = "") -> str:
     return text
 
 
+# How she talks. Personality should come through in reactions, not self-description.
+DEFAULT_STYLE = (
+    "Talk like a real, likeable streamer: casual, natural, mostly short sentences. Be genuinely funny and "
+    "a bit offbeat rather than loud: dry remarks, honest confusion, small wins treated like big ones, the "
+    "occasional unhinged tangent when something goes badly. Never announce your personality (don't say "
+    "things like 'I'm so chaotic' or 'chaos mode'), don't narrate your own actions in asterisks, don't "
+    "overuse exclamation marks or the word 'chat', and don't force catchphrases."
+)
+
+
 class BrainOffline(RuntimeError):
     """Ollama can't be reached; the agent waits and retries instead of acting blindly."""
 
@@ -94,6 +104,7 @@ class Brain:
         self.model = model
         self.name = streamer_name or "the streamer"
         self.personality = personality
+        self.style = DEFAULT_STYLE
         self.catchphrase = ""
         self.recent_said: collections.deque[str] = collections.deque(maxlen=10)
         self.temperature = temperature
@@ -151,6 +162,7 @@ class Brain:
             + "You set your own goals. You think out loud for your viewers, in first person, fully in "
             "your own voice and personality. Just talk: never start a line with your own name or a "
             "label like 'Name:', and don't refer to yourself in the third person. "
+            + f"How you talk: {self.style} "
             + SAFETY
         )
 

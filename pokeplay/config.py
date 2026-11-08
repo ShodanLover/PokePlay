@@ -19,11 +19,12 @@ class EmulatorConfig:
 class BrainConfig:
     ollama_url: str = "http://127.0.0.1:11434"
     model: str = "qwen3:4b"
-    temperature: float = 0.85
+    temperature: float = 0.75
     context_tokens: int = 4096
     streamer_name: str = ""     # leave empty: the AI picks its own name on first launch
     # The only thing decided for her; she invents the rest of herself.
-    persona_hint: str = "a female AI with a chaotic, slightly unhinged, dramatic personality"
+    persona_hint: str = "a female AI streamer with a dry, offbeat sense of humor who gets a little unhinged when things go wrong"
+    speaking_style: str = ""   # how she talks, in your own words (empty = the built-in style)
     memory_file: str = "memory.json"
     persona_file: str = "persona.json"
 
@@ -34,7 +35,9 @@ class VoiceConfig:
     piper_model: str = ""
     rate: int = 1
     gender: str = "female"      # Windows voice: female | male
-    volume: int = 100           # her voice volume, 0-100
+    volume: int = 85            # her voice volume, 0-100
+    voice_name: str = ""        # a specific Windows voice (see: python -m pokeplay --list-voices)
+    piper_exe: str = "piper/piper.exe"
     wait_for_voice: bool = True
 
 
@@ -47,6 +50,7 @@ class OverlayConfig:
 class CommentaryConfig:
     enabled: bool = True
     min_seconds_between: float = 8
+    max_silence_seconds: float = 25   # if she's been quiet this long, she thinks out loud
 
 
 @dataclass

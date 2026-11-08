@@ -7,6 +7,7 @@ import argparse
 import datetime
 import os
 import sys
+import time
 
 
 class _Tee:
@@ -44,10 +45,30 @@ def main() -> int:
     parser.add_argument("--config", default="config.toml", help="path to config file (default: config.toml)")
     parser.add_argument("--inspect", action="store_true",
                         help="print the game state the bot can see, then exit (no AI needed)")
+    parser.add_argument("--list-voices", action="store_true", help="show the voices you can use")
+    parser.add_argument("--get-voice", metavar="NAME", help="download a free Piper voice and switch to it")
+    parser.add_argument("--test-voice", action="store_true", help="say a test line with your current voice settings")
     args = parser.parse_args()
+
+    if args.list_voices:
+        from .voices import list_voices
+        return list_voices()
+    if args.get_voice:
+        from .voices import get_voice
+        return get_voice(args.get_voice, args.config)
 
     from .config import load_config
     cfg = load_config(args.config)
+
+    if args.test_voice:
+        from .narrator import Narrator
+        v = cfg.voice
+        n = Narrator(v.engine, v.piper_model, v.rate, gender=v.gender, volume=v.volume,
+                     voice_name=v.voice_name, piper_exe=v.piper_exe)
+        n.say("Hi! This is what I sound like. Is this too loud, or just right?")
+        time.sleep(0.5)
+        n.wait_until_quiet(30)
+        return 0
 
     if args.inspect:
         from .inspect_state import inspect

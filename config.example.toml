@@ -11,12 +11,15 @@ ollama_url = "http://127.0.0.1:11434"
 # qwen3:4b fits easily on a 6 GB card (GTX 1660 / 1660 Ti) alongside OBS.
 # If you have more VRAM free, try "qwen3:8b" for smarter play.
 model = "qwen3:4b"
-temperature = 0.85       # higher = more chaotic and creative
+temperature = 0.75       # higher = more random and creative, lower = more sensible
 context_tokens = 4096
 # She chooses her own name and personality on first launch and saves them in persona.json.
 # Delete persona.json if you ever want her to reinvent herself.
 streamer_name = ""                  # leave empty to let her choose (recommended)
-persona_hint = "a female AI with a chaotic, slightly unhinged, dramatic personality"   # the only thing decided for her
+persona_hint = "a female AI streamer with a dry, offbeat sense of humor who gets a little unhinged when things go wrong"   # used once, when she invents herself
+# How she talks, in your own words. Leave empty for the built-in style
+# (casual, dry humor, no "I'm so chaotic!", no asterisk actions, no forced catchphrases).
+speaking_style = ""
 memory_file = "memory.json"         # everything she has learned (keep it safe!)
 persona_file = "persona.json"
 
@@ -28,7 +31,8 @@ engine = "windows"
 piper_model = ""          # e.g. "voices/en_US-lessac-medium.onnx" when engine = "piper"
 rate = 1                  # Windows voice speed, -10 (slow) to 10 (fast)
 gender = "female"         # Windows voice: "female" or "male"
-volume = 100              # her voice volume, 0-100 (turn the GAME down instead; see README)
+volume = 85               # her voice volume, 0-100
+voice_name = ""           # pick a specific Windows voice; see: python -m pokeplay --list-voices
 wait_for_voice = true     # finish talking before choosing the next action
 
 [overlay]
@@ -37,3 +41,4 @@ port = 8765               # OBS Browser Source URL: http://127.0.0.1:8765
 [commentary]
 enabled = true            # react out loud to battles, level ups, etc.
 min_seconds_between = 8
+max_silence_seconds = 25   # if she's been quiet this long, she thinks out loud about what's going on

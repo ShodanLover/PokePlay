@@ -41,7 +41,8 @@ class Agent:
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
-                                 gender=cfg.voice.gender, volume=cfg.voice.volume)
+                                 gender=cfg.voice.gender, volume=cfg.voice.volume,
+                                 voice_name=cfg.voice.voice_name, piper_exe=cfg.voice.piper_exe)
         self.naming = NamingScreen(self.emu)
         self.world = Overworld(self.emu, self.game, self.memory)
         self.pilot = BattlePilot(self.emu, self.game, chooser=self._choose_battle_action,
@@ -69,6 +70,7 @@ class Agent:
         self._decisions_since_reflect = 0
         self._actions_since_discovery = 0
         self._last_state: GameState | None = None
+        self._activity = "just getting started"
 
     # ------------------------------------------------------------------ startup
     def start(self) -> None:
@@ -121,6 +123,8 @@ class Agent:
         # The catchphrase is NOT in every prompt (a small model would repeat it constantly).
         self.brain.personality = persona.get("personality", "")
         self.brain.catchphrase = persona.get("catchphrase", "")
+        if self.cfg.brain.speaking_style:
+            self.brain.style = self.cfg.brain.speaking_style
         self.overlay.update(streamer=persona["name"])
         print(f"She is: {persona['name']} - {persona.get('personality', '')}")
 
@@ -268,8 +272,21 @@ class Agent:
 
     def _commentary_worker(self) -> None:
         last = 0.0
+        silence = self.cfg.commentary.max_silence_seconds
         while True:
-            batch = [self._events.get()]
+            try:
+                batch = [self._events.get(timeout=2)]
+            except queue.Empty:
+                quiet_for = time.time() - self.narrator.last_spoke
+                if silence and quiet_for >= silence and not self.narrator.is_speaking() and self._context:
+                    line = self.brain.comment(
+                        [f"It's been quiet for a bit. Right now you're: {self._activity}. Think out loud about "
+                         "whatever is on your mind: what you're doing, your team, your plan, something you "
+                         "noticed, or how it's going."], self._context)
+                    if line:
+                        self._speak(line)
+                    self.narrator.last_spoke = time.time()   # don't retry instantly if it failed
+                continue
             time.sleep(1.0)    # group things that happen close together
             while not self._events.empty():
                 batch.append(self._events.get_nowait())
@@ -471,6 +488,7 @@ class Agent:
     # ------------------------------------------------------------------ her decisions
     def _apply_decision(self, d, action_label: str) -> None:
         print(f"[brain] {d.thought}  ->  {action_label}")
+        self._activity = action_label[:120]
         self.memory.bump("decisions")
         self.overlay.update(thought=d.thought, action=action_label)
         self.overlay.log(f"▶ {action_label}")
