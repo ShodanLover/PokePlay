@@ -500,12 +500,19 @@ def test_discoveries_keep_her_goal_alive(tmp_path):
 
 
 def test_hints_follow_her_progress():
-    from pokeplay.hints import BY_BADGES, NO_TEAM, PARCEL, hint_for
+    from pokeplay import hints as h
 
-    assert hint_for(0, False, []) == NO_TEAM
-    assert hint_for(0, True, ["OAK'S PARCEL"]) == PARCEL
-    assert hint_for(0, True, []) == BY_BADGES[0]
-    assert hint_for(8, True, []) == BY_BADGES[8] and hint_for(99, True, []) == BY_BADGES[8]
+    assert h.hint_for(0, False, [], [], False) == h.NO_TEAM
+    assert h.hint_for(0, True, [], ["Pallet Town", "Route 1"], False) == h.TO_VIRIDIAN
+    assert h.hint_for(0, True, [], ["Viridian City"], False) == h.GET_PARCEL
+    assert h.hint_for(0, True, ["OAK'S PARCEL"], ["Viridian City"], False) == h.PARCEL
+    assert h.hint_for(0, True, [], ["Viridian City"], True) == h.TO_FOREST
+    assert h.hint_for(0, True, [], ["Viridian Forest"], True) == h.THROUGH_FOREST
+    assert h.hint_for(0, True, [], ["Pewter City"], True) == h.BROCK
+    assert h.hint_for(1, True, [], ["Pewter City"], True) == h.TO_ROUTE_3
+    assert h.hint_for(1, True, [], ["Mt. Moon - 1F"], True) == h.THROUGH_MT_MOON
+    assert h.hint_for(1, True, [], ["Cerulean City"], True) == h.MISTY
+    assert h.hint_for(8, True, [], [], True) == h.BY_BADGES[8] and h.hint_for(99, True, [], [], True) == h.BY_BADGES[8]
 
 
 def test_she_is_told_exactly_what_changed(tmp_path):

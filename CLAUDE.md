@@ -36,8 +36,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
   is no longer spoken). She doesn't greet or address viewers: she can't see them. "Ugh" is stripped from her speech, and lines with "chaos"/"chaotic" aren't
   spoken. Style rules are in `brain.py` (`DEFAULT_STYLE`), and the `speaking_style` config overrides them.
-- **Occasional story hints (owner changed this on 2026-11-08):** she was too lost to be watchable, so `hints.py` gives
-  a nudge for 4 of every 15 map decisions, based on badges and team. Otherwise the first-timer rule below still holds.
+- **Guided opening (owner changed this on 2026-11-08):** she was too lost to be watchable, so `hints.py` tells her the
+  next story step on every map decision until she has 2 badges (parcel, Brock, Mt. Moon, Misty), then for 4 of every
+  15 decisions. Otherwise the first-timer rule below still holds.
 - **Unattended play:** general rules keep her moving: impossible actions disappear, repeated ones rest, after 6
   decisions without anything new she can only pick what she's tried least (`_prefer_untried`), and a goal with no
   progress for 15 decisions is dropped along with the notes feeding it.

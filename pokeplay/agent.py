@@ -33,7 +33,8 @@ JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
 MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
 NO_TURNING_BACK = 6         # map decisions in a new place before she may go back the way she came
-HINT_EVERY = 15            # map decisions between hints about what to do next
+GUIDED_UNTIL_BADGES = 2     # the opening is spelled out for her until she has this many badges
+HINT_EVERY = 15           # map decisions between hints about what to do next
 HINT_LASTS = 4              # how many map decisions each hint stays in her mind
 GOAL_PATIENCE = 15         # decisions with no discovery before her current goal is dropped
 EVENT_MAX_AGE = 10         # seconds after which something that happened is too old to react to
@@ -550,7 +551,7 @@ class Agent:
             parts.append(f"YOUR CURRENT GOAL (you chose it): {m.goal}")
         if m.mood:
             parts.append(f"HOW YOU FEEL: {m.mood}")
-        journal = m.journal[-(8 if short else 15):]
+        journal = m.journal[-(5 if short else 8):]      # a shorter prompt is a faster decision
         if journal:
             parts.append("YOUR JOURNAL (what you've learned so far):\n" + "\n".join(f"- {j}" for j in journal))
         else:
@@ -582,9 +583,13 @@ class Agent:
         parts.append("WHAT JUST CHANGED (this is real, so react to it):\n" + "\n".join(f"- {c}" for c in self._changes)
                      if self._changes else "WHAT JUST CHANGED: nothing since your last action.")
         self._hint_clock += 1
-        if self._hint_clock % HINT_EVERY < HINT_LASTS:
-            parts.append("A THOUGHT COMES TO YOU ABOUT WHAT TO DO NEXT (follow it if you can): "
-                         + hint_for(s.badges, bool(s.party), s.key_items))
+        carrying_parcel = any("PARCEL" in item.upper() for item in s.key_items)
+        if carrying_parcel:
+            self.memory.stats["carried_parcel"] = 1
+        if s.badges < GUIDED_UNTIL_BADGES or self._hint_clock % HINT_EVERY < HINT_LASTS:
+            delivered = bool(self.memory.stats.get("carried_parcel")) and not carrying_parcel
+            parts.append("YOUR NEXT STEP (do this): "
+                         + hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered))
         if self._actions_since_discovery >= 8:
             parts.append(f"You've done {self._actions_since_discovery} things in a row without discovering "
                          "anything new.")
