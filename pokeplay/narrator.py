@@ -20,11 +20,13 @@ import wave
 
 class Narrator:
     def __init__(self, engine: str = "windows", piper_model: str = "", rate: int = 0,
-                 max_queue: int = 3, on_speak=None):
+                 max_queue: int = 3, on_speak=None, on_done=None, gender: str = "female"):
         self.engine = engine
         self.piper_model = piper_model
         self.rate = rate
         self.on_speak = on_speak      # callback(text) when a line starts playing
+        self.on_done = on_done        # callback() when it finishes (clears subtitles)
+        self.gender = gender
         self._q: queue.Queue[str] = queue.Queue()
         self._max_queue = max_queue
         self._busy = threading.Event()
@@ -69,6 +71,11 @@ class Narrator:
             except Exception as e:  # noqa: BLE001
                 print(f"[voice] error: {e}")
             finally:
+                if self.on_done and self._q.empty():
+                    try:
+                        self.on_done()
+                    except Exception:  # noqa: BLE001
+                        pass
                 self._busy.clear()
 
     def _speak_windows(self, text: str) -> None:
@@ -79,6 +86,7 @@ class Narrator:
             "Add-Type -AssemblyName System.Speech; "
             "$s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
             f"$s.Rate = {int(self.rate)}; "
+            f"try {{ $s.SelectVoiceByHints('{'Male' if self.gender.lower() == 'male' else 'Female'}') }} catch {{}}; "
             "$s.Speak([Console]::In.ReadToEnd())"
         )
         subprocess.run(["powershell", "-NoProfile", "-Command", script], input=text.encode("utf-8"),

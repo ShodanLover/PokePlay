@@ -1,6 +1,8 @@
 # PokePlay
 
-An AI that plays **Pokémon FireRed** live on Twitch and talks through what it's doing.
+An AI that plays **Pokémon FireRed** live on Twitch and thinks out loud while she plays.
+She picks her own name and personality, names her own character, rival and Pokémon, and
+everything she says is generated live. Nothing is scripted except a few safety rules.
 It runs **completely free** on your own PC: no paid AI services and no subscriptions.
 
 ```
@@ -26,6 +28,12 @@ It runs **completely free** on your own PC: no paid AI services and no subscript
   a list (*"Go through the door to Professor Oak's Lab"*, *"Talk to the person at (5,3)"*,
   *"Train in the tall grass"*…) and says one line out loud explaining why. It also reacts to battles,
   level-ups and evolutions.
+- **She is her own person.** On first launch she invents her streamer name, personality and
+  catchphrase (saved in `persona.json`). The only fixed instructions are safety rules: family-friendly,
+  within Twitch guidelines, no hate or harassment.
+- **Subtitles:** everything she says is shown word-for-word at the bottom of the stream. Twitch has no
+  automatic captions for live streams, but we already have her exact words: the AI produces the text
+  and the voice then reads it, so captions are free and always exact.
 - A built-in **walkthrough** works out the current goal from the game's story flags, so the AI always
   knows what it's working toward.
 - An **overlay page** shows the AI's thoughts, goal, team HP bars and recent events, ready for OBS.
@@ -77,15 +85,16 @@ cd PokePlay
 copy config.example.toml config.toml
 ```
 
-Open `config.toml` in Notepad and change `streamer_name` to whatever you want the AI to be called.
+You don't need to name her: she chooses her own name the first time she starts.
 
 ### 4. Set up mGBA
 
 1. Open mGBA and load your FireRed ROM (**File → Load ROM**).
 2. **Important:** go to **Tools → Settings → Emulation** (or **Interface** on some versions) and **untick
    "Pause when inactive"**. Otherwise the game freezes when you click on OBS.
-3. **Play the opening yourself** up to the point where you're standing in your bedroom: Oak's speech
-   and naming yourself and your rival. Then save in-game (START → SAVE). The bot takes over from there.
+3. Leave the game on the **title screen**. She plays from the very beginning, including Oak's speech,
+   and types her own player name, rival name and Pokémon nicknames on the in-game keyboard.
+   (If you already have a save file, she'll press CONTINUE.)
 4. Load the bridge: **Tools → Scripting…**, then in that window **File → Load script…** and pick
    `lua/pokeplay_bridge.lua` from the PokePlay folder.
    The scripting window should say: `PokePlay bridge listening on 127.0.0.1:8888`.
@@ -124,6 +133,8 @@ It also makes an mGBA save state in slot 9 every 10 minutes, as a backup.
      so the pixels stay sharp.
    - **Browser** source → URL `http://127.0.0.1:8765`, Width **1920**, Height **1080**. The panel
      sits on the right side.
+   - **Browser** source → URL `http://127.0.0.1:8765/subtitles`, Width **1920**, Height **1080**, placed on
+     top of everything. These are her live subtitles.
    - **Audio**: OBS's **Desktop Audio** picks up both the game and the AI's voice automatically.
 5. Hit **Start Streaming**.
 
@@ -136,13 +147,13 @@ pip install piper-tts
 ```
 
 Download a voice (both the `.onnx` and `.onnx.json` files) from
-huggingface.co/rhasspy/piper-voices. For example `en/en_US/lessac/medium`, or `en_US-ryan-high` for
-a more energetic voice. Put them in a `voices` folder, then in `config.toml`:
+huggingface.co/rhasspy/piper-voices. Female English voices include `en/en_US/amy/medium`,
+`en/en_US/lessac/medium` and `en/en_GB/jenny_dioco/medium`. Put them in a `voices` folder, then in `config.toml`:
 
 ```toml
 [voice]
 engine = "piper"
-piper_model = "voices/en_US-lessac-medium.onnx"
+piper_model = "voices/en_US-amy-medium.onnx"
 ```
 
 ---
@@ -162,7 +173,7 @@ piper_model = "voices/en_US-lessac-medium.onnx"
 
 ## What it can and can't do yet (v0.1)
 
-**Works:** walking anywhere on a map, doors, stairs, map exits, ledges, talking to people (including across
+**Works:** starting a new game, typing her own names, walking anywhere on a map, doors, stairs, map exits, ledges, talking to people (including across
 shop counters), training in tall grass, wild and trainer battles with smart move choice, switching
 when a Pokémon faints, running from bad wild battles, reading dialogue, story-aware goals for all 8 gyms,
 narration, and the overlay.
@@ -190,7 +201,8 @@ pokeplay/
   objectives.py             story-aware goals
   brain.py                  local AI via Ollama: decisions + commentary
   narrator.py               text-to-speech (Windows voice or Piper)
-  overlay/                  OBS overlay web page
+  naming.py                 types names on the in-game keyboard
+  overlay/                  OBS overlay + subtitles web pages
   agent.py                  main loop
 tests/                      run with: pip install pytest lupa && python -m pytest
 ```

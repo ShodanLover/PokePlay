@@ -8,13 +8,15 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 HTML_PATH = Path(__file__).with_name("overlay.html")
+SUBTITLES_PATH = Path(__file__).with_name("subtitles.html")
 
 
 class OverlayState:
     def __init__(self):
         self._lock = threading.Lock()
         self._data: dict = {"say": "", "thought": "", "objective": "", "location": "", "badges": 0,
-                            "money": 0, "party": [], "log": [], "mode": "", "action": ""}
+                            "money": 0, "party": [], "log": [], "mode": "", "action": "",
+                            "subtitle": "", "streamer": ""}
 
     def update(self, **kwargs) -> None:
         with self._lock:
@@ -34,6 +36,8 @@ def start_overlay(state: OverlayState, port: int = 8765) -> ThreadingHTTPServer:
         def do_GET(self):  # noqa: N802
             if self.path.startswith("/state.json"):
                 body, ctype = state.snapshot(), "application/json"
+            elif self.path.startswith("/subtitles"):
+                body, ctype = SUBTITLES_PATH.read_bytes(), "text/html; charset=utf-8"
             elif self.path in ("/", "/index.html"):
                 body, ctype = HTML_PATH.read_bytes(), "text/html; charset=utf-8"
             else:

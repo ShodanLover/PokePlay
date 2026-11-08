@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PokePlay Subtitles</title>
+<style>
+  /* OBS Browser Source: http://127.0.0.1:8765/subtitles  (1920 x 1080, sits on top of everything) */
+  :root { --text: #ffffff; --outline: #000000; --name: #ffcb3d; --box: rgba(0, 0, 0, 0.55); }
+  html, body { margin: 0; background: transparent; overflow: hidden; }
+  .bar { position: absolute; left: 50%; bottom: 48px; transform: translateX(-50%);
+    max-width: 1500px; width: max-content; padding: 14px 28px; border-radius: 12px; background: var(--box);
+    font-family: "Segoe UI", system-ui, sans-serif; font-size: 42px; font-weight: 700; line-height: 1.25;
+    color: var(--text); text-align: center;
+    text-shadow: -2px -2px 0 var(--outline), 2px -2px 0 var(--outline), -2px 2px 0 var(--outline), 2px 2px 0 var(--outline);
+    opacity: 0; transition: opacity .25s ease; }
+  .bar.on { opacity: 1; }
+  .name { color: var(--name); margin-right: 12px; }
+</style>
+</head>
+<body>
+<div class="bar" id="bar"><span class="name" id="name"></span><span id="line"></span></div>
+<script>
+  let current = "";
+  async function refresh() {
+    try {
+      const s = await (await fetch("/state.json", { cache: "no-store" })).json();
+      const text = s.subtitle || "";
+      if (text !== current) {
+        current = text;
+        if (text) {
+          document.getElementById("name").textContent = s.streamer ? s.streamer + ":" : "";
+          document.getElementById("line").textContent = text;
+        }
+        document.getElementById("bar").classList.toggle("on", !!text);
+      }
+    } catch (e) { /* agent not running */ }
+  }
+  setInterval(refresh, 150);
+</script>
+</body>
+</html>

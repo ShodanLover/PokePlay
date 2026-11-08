@@ -9,6 +9,13 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass
 
+# The only fixed rules: safeguards for a public Twitch stream.
+SAFETY = (
+    "Rules you must always follow: keep it family-friendly and within Twitch's community guidelines; "
+    "no slurs, hate, harassment, sexual content or graphic violence; don't talk about real people's "
+    "private lives; never pretend to be a real person. "
+)
+
 DECISION_SCHEMA = {
     "type": "object",
     "properties": {
@@ -31,11 +38,12 @@ class Decision:
 
 
 class Brain:
-    def __init__(self, url: str, model: str, streamer_name: str, temperature: float = 0.7,
-                 context_tokens: int = 4096, timeout: float = 120.0):
+    def __init__(self, url: str, model: str, streamer_name: str = "", temperature: float = 0.7,
+                 context_tokens: int = 4096, timeout: float = 120.0, personality: str = ""):
         self.url = url.rstrip("/")
         self.model = model
-        self.name = streamer_name
+        self.name = streamer_name or "the streamer"
+        self.personality = personality
         self.temperature = temperature
         self.context_tokens = context_tokens
         self.timeout = timeout
@@ -83,9 +91,11 @@ class Brain:
     def _system(self) -> str:
         return (
             f"You are {self.name}, an AI playing Pokémon FireRed live on a Twitch stream. "
-            "You control the game by choosing from a numbered list of actions. "
-            "You think out loud for your viewers: be upbeat, curious and a little funny, never rude. "
-            "Choose the action that best moves you toward the current objective. "
+            + (f"Your personality: {self.personality} " if self.personality else "")
+            + "You are fully in control of the game; you choose from a numbered list of actions. "
+            "You think out loud for your viewers, in first person, in your own words and style. "
+            + SAFETY
+            + "Choose the action that best moves you toward the current objective. "
             "Don't repeat actions that failed or that you've already picked many times in the same place; "
             "try something new instead. Unknown doorways are worth exploring."
         )
@@ -96,13 +106,13 @@ class Brain:
             f"{context}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
             "Reply with JSON only: "
             '{"thought": "your reasoning, 1-2 sentences", '
-            '"say": "one short, lively sentence to say out loud to chat", '
+            '"say": "think out loud to chat in 1-3 short spoken sentences: what you notice and why you chose this", '
             '"choice": <action number>, '
             '"note": "optional: a short fact worth remembering long-term, or empty"}'
         )
         messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]
         try:
-            raw = self._chat(messages, fmt=DECISION_SCHEMA, max_tokens=250)
+            raw = self._chat(messages, fmt=DECISION_SCHEMA, max_tokens=400)
             data = json.loads(_extract_json(raw))
             choice = int(data.get("choice", 1)) - 1
             if not 0 <= choice < len(option_lines):
@@ -112,13 +122,67 @@ class Brain:
         except Exception as e:  # noqa: BLE001 - never let the brain crash the stream
             print(f"[brain] decision failed ({e}); picking at random")
             choice = random.randrange(len(option_lines))
-            return Decision("I couldn't make up my mind, so I'm going with my gut.",
-                            "Let's try this way!", choice, fallback=True)
+            return Decision("", "", choice, fallback=True)   # stay quiet rather than fake a thought
+
+    def create_persona(self, hint: str) -> dict:
+        """Let the AI invent its own streamer identity."""
+        schema = {"type": "object",
+                  "properties": {"name": {"type": "string"}, "personality": {"type": "string"},
+                                 "catchphrase": {"type": "string"}},
+                  "required": ["name", "personality", "catchphrase"]}
+        prompt = (
+            f"You are an AI about to start your very own Twitch channel where you play Pokémon FireRed "
+            f"and think out loud. You are {hint}. Everything else about you is your choice. "
+            "Choose your own streamer name (easy to say out loud, not a real person's name and not a "
+            "Pokémon character's name), describe your own personality in one sentence, and pick a catchphrase. "
+            'Reply with JSON: {"name": "...", "personality": "...", "catchphrase": "..."}'
+        )
+        for _ in range(3):
+            try:
+                data = json.loads(_extract_json(self._chat([{"role": "user", "content": prompt}],
+                                                           fmt=schema, max_tokens=150)))
+                name = " ".join(str(data.get("name", "")).split())[:24]
+                if name:
+                    return {"name": name, "personality": str(data.get("personality", "")).strip(),
+                            "catchphrase": str(data.get("catchphrase", "")).strip()}
+            except Exception as e:  # noqa: BLE001
+                print(f"[brain] persona attempt failed: {e}")
+        raise RuntimeError("The AI couldn't come up with a name. Is Ollama working? Try again.")
+
+    def choose_name(self, kind: str, max_chars: int, species: str = "", context: str = "") -> tuple[str, str]:
+        """Pick an in-game name. Returns (name, what to say about it)."""
+        what = {
+            "player": "your own trainer character",
+            "rival": "your rival (the professor's grandson)",
+            "nickname": f"your new {species}",
+            "caught": f"the {species} you just caught",
+            "box": "a PC storage box",
+        }.get(kind, "this")
+        schema = {"type": "object", "properties": {"name": {"type": "string"}, "say": {"type": "string"}},
+                  "required": ["name", "say"]}
+        prompt = (
+            (context + "\n\n" if context else "")
+            + f"You get to type a name for {what}. It must be at most {max_chars} characters, "
+            "using only English letters, digits, spaces and . , ! ? - ' "
+            + ("You might want to use your own name or a short version of it. " if kind == "player" else "")
+            + 'Reply with JSON: {"name": "...", "say": "one or two sentences out loud about why you picked it"}'
+        )
+        messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]
+        try:
+            data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
+            return str(data.get("name", "")).strip(), str(data.get("say", "")).strip()
+        except Exception as e:  # noqa: BLE001
+            print(f"[brain] naming failed: {e}")
+            return "", ""
+
+    def greet(self, context: str = "") -> str:
+        """Her own opening line for the stream."""
+        return self.comment(["The stream just started and viewers are arriving. Say hello however you like."], context)
 
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
             f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
-            "\n\nReact out loud to your viewers in ONE short sentence (under 25 words). "
+            "\n\nReact out loud to your viewers in one or two short spoken sentences (under 35 words total). "
             "No emojis, no hashtags, no quotation marks."
         )
         messages = [{"role": "system", "content": self._system()}, {"role": "user", "content": prompt}]

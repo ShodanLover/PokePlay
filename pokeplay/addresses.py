@@ -104,3 +104,12 @@ NUM_METATILES_IN_PRIMARY = 640
 METATILE_BEHAVIOR_MASK = 0x000001FF
 
 PLAYER_AVATAR_FLAG_SURFING = 1 << 3
+
+# --- naming screen (keyboard) ---
+sNamingScreen = 0x0203998C          # pointer to struct NamingScreenData
+gSprites = 0x0202063C               # 0x44 bytes each; data[] at +0x2E
+NS_TEXT_BUFFER = 0x1800
+NS_CURRENT_PAGE = 0x1E22
+NS_CURSOR_SPRITE_ID = 0x1E23
+NS_TEMPLATE_NUM = 0x1E2C
+NS_MON_SPECIES = 0x1E34

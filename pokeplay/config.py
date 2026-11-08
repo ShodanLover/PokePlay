@@ -21,7 +21,9 @@ class BrainConfig:
     model: str = "qwen3:4b"
     temperature: float = 0.7
     context_tokens: int = 4096
-    streamer_name: str = "PokePlay AI"
+    streamer_name: str = ""     # leave empty: the AI picks its own name on first launch
+    persona_hint: str = "a female AI"   # the only thing decided for her; she invents the rest
+    persona_file: str = "persona.json"
 
 
 @dataclass
@@ -29,6 +31,7 @@ class VoiceConfig:
     engine: str = "windows"     # windows | piper | none
     piper_model: str = ""
     rate: int = 1
+    gender: str = "female"      # Windows voice: female | male
     wait_for_voice: bool = True
 
 

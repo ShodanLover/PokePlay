@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import collections
+import json
 import queue
 import threading
 import time
@@ -13,6 +14,7 @@ from .brain import Brain
 from .config import Config
 from .emulator import Emulator
 from .game import Game, GameState
+from .naming import MAX_CHARS, NamingScreen
 from .narrator import Narrator
 from .objectives import current_objective
 from .overlay.server import OverlayState, start_overlay
@@ -33,7 +35,11 @@ class Agent:
                            cfg.brain.temperature, cfg.brain.context_tokens)
         self.overlay = OverlayState()
         self.narrator = Narrator(cfg.voice.engine, cfg.voice.piper_model, cfg.voice.rate,
-                                 on_speak=lambda t: self.overlay.update(say=t))
+                                 on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
+                                 on_done=lambda: self.overlay.update(subtitle=""),
+                                 gender=cfg.voice.gender)
+        self.naming = NamingScreen(self.emu)
+        self._named_this_screen = False
         self.world = Overworld(self.emu, self.game)
         self.pilot = BattlePilot(self.emu, self.game)
 
@@ -61,11 +67,33 @@ class Agent:
         print("Read species, move and item data from the ROM.")
         self.brain.check()
         print(f"Ollama model '{self.cfg.brain.model}' is ready.")
+        self._load_persona()
         start_overlay(self.overlay, self.cfg.overlay.port)
         print(f"Overlay: http://127.0.0.1:{self.cfg.overlay.port}  (add it to OBS as a Browser Source)")
         if self.cfg.commentary.enabled:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
-        self.narrator.say(f"Hey chat, {self.cfg.brain.streamer_name} here. Let's play some Pokémon FireRed!")
+        hello = self.brain.greet()
+        if hello:
+            self.narrator.say(hello)
+
+    def _load_persona(self) -> None:
+        """She picks her own name and personality the first time, then keeps them."""
+        path = self.cfg.brain.persona_file
+        try:
+            with open(path, encoding="utf-8") as f:
+                persona = json.load(f)
+        except (OSError, ValueError):
+            print("First launch: letting the AI choose who she wants to be...")
+            persona = self.brain.create_persona(self.cfg.brain.persona_hint)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(persona, f, indent=2, ensure_ascii=False)
+        if self.cfg.brain.streamer_name:          # manual override, if you ever want one
+            persona["name"] = self.cfg.brain.streamer_name
+        self.brain.name = persona["name"]
+        self.brain.personality = " ".join(x for x in (persona.get("personality", ""),
+                                                      f"Your catchphrase: {persona.get('catchphrase', '')}") if x)
+        self.overlay.update(streamer=persona["name"])
+        print(f"She is: {persona['name']} - {persona.get('personality', '')}")
 
     def run(self) -> None:
         self.start()
@@ -103,8 +131,7 @@ class Agent:
         elif mode in ("summary", "bag"):
             self.emu.press("B", hold=2, wait=12)
         elif mode == "naming":
-            self.emu.press("START", hold=2, wait=10)
-            self.emu.press("A", hold=2, wait=20)
+            self._name_something()
         else:
             # Screen transitions, title screen, evolution, etc.
             self._other_loops += 1
@@ -115,6 +142,8 @@ class Agent:
 
         if mode != "other":
             self._other_loops = 0
+        if mode != "naming":
+            self._named_this_screen = False
         self._periodic(mode)
 
     def _periodic(self, mode: str) -> None:
@@ -178,6 +207,32 @@ class Agent:
             text = self.pilot.events.pop(0)
             self.overlay.update(thought=text)
             self.history.append(text)
+            if self.cfg.commentary.enabled:
+                self._events.put(text)      # she reacts to the battle in her own words
+
+    def _name_something(self) -> None:
+        if self._named_this_screen:
+            # Already typed; if we're still here, confirm with OK.
+            self.emu.press("START", hold=2, wait=10)
+            self.emu.press("A", hold=2, wait=20)
+            return
+        self._named_this_screen = True
+        self.emu.wait_frames(40)    # let the screen fade in
+        kind, species_id = self.naming.info()
+        species = self.game.species_name(species_id) if kind in ("nickname", "caught") else ""
+        if self.cfg.voice.wait_for_voice:
+            self.narrator.wait_until_quiet()
+        self.overlay.update(thought="Thinking of a name...")
+        name, say = self.brain.choose_name(kind, MAX_CHARS.get(kind, 7), species, self._context)
+        if say:
+            self.narrator.say(say)
+        self.overlay.update(thought=f"Typing the name: {name}")
+        if name and self.naming.type_name(name):
+            self.history.append(f"Named {kind} {species}: {name}".replace("  ", " "))
+            self._event(f"Named {kind} {species} '{name}'.".replace("  ", " "))
+        else:
+            self.emu.press("START", hold=2, wait=10)   # fall back to the game's default name
+            self.emu.press("A", hold=2, wait=20)
 
     def _commentary_worker(self) -> None:
         last = 0.0
@@ -203,6 +258,8 @@ class Agent:
             short = msg if len(msg) <= 160 else msg[:157] + "..."
             self.history.append(f'Message on screen: "{short}"')
             self.overlay.log(f'💬 {short}')
+            if self.cfg.commentary.enabled:
+                self._events.put(f'Someone in the game says: "{short}"')
             self._dialog_presses = 0
         self._dialog_presses += 1
         # Mostly A to advance text; an occasional B closes menus we didn't mean to open.

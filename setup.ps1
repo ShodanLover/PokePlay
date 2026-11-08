@@ -61,12 +61,7 @@ Step "Creating config.toml"
 if (Test-Path config.toml) { Ok "config.toml already exists (left unchanged)" }
 else {
     Copy-Item config.example.toml config.toml
-    $name = Read-Host "    What should the AI call itself on stream? (press Enter for 'PokePlay AI')"
-    if ($name) {
-        $safe = $name.Replace('"', "'")
-        (Get-Content config.toml) -replace 'streamer_name = ".*?"', "streamer_name = `"$safe`"" | Set-Content config.toml -Encoding UTF8
-    }
-    Ok "config.toml created"
+    Ok "config.toml created (she'll pick her own name the first time she starts)"
 }
 
 Step "Turning off 'Pause when inactive' in mGBA"
@@ -85,7 +80,8 @@ else {
 
 Write-Host ""
 if ($failed.Count -eq 0) {
-    Write-Host "All set! Next: open mGBA, load your FireRed ROM, then Tools > Scripting > File > Load script" -ForegroundColor Green
+    Write-Host "All set! Next: open mGBA, load your FireRed ROM (start a NEW GAME or leave it on the title screen)," -ForegroundColor Green
+    Write-Host "then Tools > Scripting > File > Load script" -ForegroundColor Green
     Write-Host "and pick lua\pokeplay_bridge.lua from this folder. Then double-click start.bat." -ForegroundColor Green
 } else {
     Write-Host "Setup finished with some problems: $($failed -join ', ')" -ForegroundColor Yellow
