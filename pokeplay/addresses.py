@@ -113,3 +113,65 @@ NS_CURRENT_PAGE = 0x1E22
 NS_CURSOR_SPRITE_ID = 0x1E23
 NS_TEMPLATE_NUM = 0x1E2C
 NS_MON_SPECIES = 0x1E34
+
+# --- menus (all from pret/pokefirered) ---
+gTasks = 0x03005090                 # 16 tasks x 0x28: func, isActive, prev, next, priority, s16 data[16]
+TASK_SIZE = 0x28
+NUM_TASKS = 16
+sMenu = 0x0203ADE4                  # struct Menu (small box menus): cursorPos at +2, maxCursorPos at +4
+sStartMenuCursorPos = 0x020370F4
+sNumStartMenuItems = 0x020370F5
+sStartMenuOrder = 0x020370F6
+sStartMenuActionTable = 0x083A7344  # MenuAction[] {text*, func}
+sContextMenuItemsPtr = 0x0203AD24
+sContextMenuNumItems = 0x0203AD28
+sItemMenuContextActions = 0x08452EB8
+gBagMenuState = 0x0203ACFC          # pocket (u16) at +6
+sPartyMenuInternal = 0x0203B09C     # pointer; actions[8] at +0xF, numActions at +0x17
+sCursorOptions = 0x0845A618         # party menu action names
+sMultichoiceLists = 0x083E04B0      # {MenuAction *list; u8 count}
+sShopMenuActions_BuySellQuit = 0x083DF09C
+sTMCaseMenuActions = 0x08463150     # USE / GIVE / EXIT
+sMoveSelectionCursorPos = 0x0203B16D
+sLastViewedMonIndex = 0x0203B16C
+gItems_PRICE_OFFSET = 16
+
+# Task functions that tell us which menu is on screen
+Task_YesNoMenu_HandleInput = 0x0809CE54
+Task_MultichoiceMenu_HandleInput = 0x0809CC98
+Task_FieldItemContextMenuHandleInput = 0x08109BE4
+Task_TMCaseContextMenu_HandleInput = 0x08132568
+Task_TMCaseHandleListInput = 0x081322D4
+Task_HandleSelectionMenuInput = 0x08122C5C
+Task_HandleChooseMonInput = 0x0811FB28
+Task_ShopMenu = 0x0809AC10
+Task_BuyMenu = 0x0809BBC0
+Task_BuyHowManyDialogueHandleInput = 0x0809BD8C
+Task_InputHandler_SelectOrForgetMove = 0x081393D4
+Task_StartMenuHandleInput = 0x0806F1F0
+Task_BagMenu_HandleInput = 0x08108F0C
+ListMenuDummyTask = 0x08106ECC
+
+# Object graphics ids for field obstacles
+OBJ_EVENT_GFX_ITEM_BALL = 92
+OBJ_EVENT_GFX_CUT_TREE = 95
+OBJ_EVENT_GFX_ROCK_SMASH_ROCK = 96
+OBJ_EVENT_GFX_PUSHABLE_BOULDER = 97
+
+# Every other yes/no handler in the game (party menu, TM Case, shops...). Any of these
+# being active while the yes/no window exists means a YES/NO question is on screen.
+YESNO_TASKS = {
+    0x080BF560,  # Task_CallYesOrNoCallback (generic, used by TM Case / shops)
+    0x080EC324,  # Task_MoveToBagYesNoMenuHandleInput
+    0x080F5708,  # Task_HandleYesNoMenu
+    0x0811FEA4,  # Task_HandleCancelChooseMonYesNoInput
+    0x08120AC4,  # Task_HandleCancelParticipationYesNoInput
+    0x08123930,  # Task_HandleSwitchItemsYesNoInput
+    0x08123E8C,  # Task_HandleSendMailToPCYesNoInput
+    0x08123F80,  # Task_HandleLoseMailMessageYesNoInput
+    0x08124828,  # Task_HandleFieldMoveExitAreaYesNoInput
+    0x08125DBC,  # Task_HandleReplaceMoveYesNoInput ("delete a move?")
+    0x08126170,  # Task_HandleStopLearningMoveYesNoInput ("stop learning?")
+    0x08127268,  # Task_HandleSwitchItemsFromBagYesNoInput
+}
+sYesNoWindowId = 0x0203ADF3         # 0xFF when no yes/no box exists

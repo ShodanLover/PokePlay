@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 
 from . import addresses as A
 from .emulator import Emulator
-from .game import (ARROW_WARPS, BEHAVIOR_COUNTER, BEHAVIOR_TALL_GRASS, Game, GameState,
-                   MapGrid, NPC)
+from .game import (ARROW_WARPS, BEHAVIOR_COUNTER, BEHAVIOR_TALL_GRASS, WATER_BEHAVIORS, Game,
+                   GameState, MapGrid, NPC)
 from .memory import Memory
 from .pathfinding import STEPS, find_path, reachable, walkable
 
@@ -36,7 +36,7 @@ def region(x: int, y: int, w: int, h: int) -> str:
 
 @dataclass
 class Option:
-    kind: str                 # warp | exit | talk | explore | train
+    kind: str                 # warp | exit | talk | explore | train | menu | water | push
     label: str
     key: str                  # stable id used to count how often it was picked / remember where it leads
     target: tuple[int, int] | None = None
@@ -133,9 +133,34 @@ class Overworld:
             best = min(reach, key=lambda t: dist[t])
             key = f"{s.map_group}.{s.map_num}|{n.local_id}"
             said = self.memory.people.get(key) if self.memory else None
-            extra = f' (you talked before; they said: "{said[:90]}")' if said else ""
-            options.append(Option("talk", f"Talk to / check the person or thing {relative(s.x, s.y, n.x, n.y)}{extra}",
+            extra = f' (you checked it before: "{said[:90]}")' if said else ""
+            what = {A.OBJ_EVENT_GFX_CUT_TREE: "the small, thin tree",
+                    A.OBJ_EVENT_GFX_PUSHABLE_BOULDER: "the big round boulder",
+                    A.OBJ_EVENT_GFX_ROCK_SMASH_ROCK: "the cracked rock",
+                    A.OBJ_EVENT_GFX_ITEM_BALL: "the round object on the ground"}.get(n.graphics_id, "the person")
+            verb = "Talk to" if what == "the person" else "Check"
+            options.append(Option("talk", f"{verb} {what} {relative(s.x, s.y, n.x, n.y)}{extra}",
                                   key, best, npc=n, distance=dist[best]))
+            if n.graphics_id == A.OBJ_EVENT_GFX_PUSHABLE_BOULDER:
+                options.append(Option("push", f"Try to push the big round boulder {relative(s.x, s.y, n.x, n.y)}",
+                                      key + "|push", best, npc=n, distance=dist[best]))
+
+        # Water's edge (she can try interacting with the water).
+        if not s.surfing:
+            shore = []
+            for (tx, ty), d in dist.items():
+                for name, (dx, dy) in STEPS.items():
+                    wx, wy = tx + dx, ty + dy
+                    if grid.in_bounds(wx, wy) and grid.behavior[wy][wx] in WATER_BEHAVIORS \
+                            and not grid.blocked[wy][wx]:
+                        shore.append((d, (tx, ty), name))
+            if shore:
+                d, tile, face = min(shore)
+                options.append(Option("water", f"Go to the water's edge {relative(s.x, s.y, *tile)} and interact with the water",
+                                      f"water:{s.map_group}.{s.map_num}", tile, direction=face, distance=d))
+
+        # The main menu (Pokémon, Bag, save...).
+        options.append(Option("menu", "Open the main menu (START button)", "menu", None, distance=0))
 
         # Tall grass for training.
         grass = [t for t in dist if grid.behavior[t[1]][t[0]] == BEHAVIOR_TALL_GRASS]
@@ -267,6 +292,28 @@ class Overworld:
             return self._train(opt, s)
         if opt.kind == "explore":
             return self.walk_to({opt.target}, s)
+        if opt.kind == "menu":
+            self.emu.press("START", hold=2, wait=30)
+            return Result("talked", "opened the menu")
+        if opt.kind == "water":
+            r = self.walk_to({opt.target}, s)
+            if r.outcome != "arrived":
+                return r
+            self.emu.press(opt.direction, hold=2, wait=8)   # face the water
+            self.emu.press("A", hold=2, wait=30)
+            return Result("talked" if self.game.mode() != "overworld" else "stuck", "")
+        if opt.kind == "push":
+            r = self.walk_to({opt.target}, s)
+            if r.outcome != "arrived":
+                return r
+            _m, _g, _n, x, y = self.game.state_light()
+            dx, dy = opt.npc.x - x, opt.npc.y - y
+            d = ("right" if dx > 0 else "left") if abs(dx) >= abs(dy) else ("down" if dy > 0 else "up")
+            before = (opt.npc.x, opt.npc.y)
+            for _ in range(3):
+                self.emu.press(d, hold=16, wait=20)
+            moved = all((n.x, n.y) != before for n in self.game.npcs() if n.local_id == opt.npc.local_id)
+            return Result("arrived" if moved else "stuck", "the boulder moved" if moved else "it didn't budge")
         return Result("stuck", f"unknown option {opt.kind}")
 
     def _nudge_warp(self, opt: Option, s: GameState) -> Result:

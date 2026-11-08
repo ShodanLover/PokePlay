@@ -210,21 +210,33 @@ piper_model = "voices/en_US-amy-medium.onnx"
 | Game freezes when OBS is focused | Untick **Pause when inactive** in mGBA settings |
 | The bot is stuck in a loop | It tracks how often it picks each option and avoids repeats, but sometimes you'll need to help. Stop it (Ctrl+C), move a few steps yourself, and restart. Its progress lives in the game, so nothing is lost |
 
-## What it can and can't do yet (v0.1)
+## What she can do (v0.3)
 
-**Works:** starting a new game, typing her own names, walking anywhere on a map, doors, stairs, map
-exits, ledges, talking to people (including across shop counters), walking in tall grass, choosing her
-own moves in battle, running away, choosing who to send out, learning matchups from battle messages,
-reading dialogue, setting her own goals, long-term memory, narration, subtitles, stats, and the overlay.
+She has full control of the game, through the same buttons and menus a player uses:
 
-**Not yet (planned):**
-- Using menus on purpose: healing items, catching Pokémon, teaching HMs (Cut/Surf/Strength), and
-  using HMs in the field. This is the next big step; the game needs Cut after the third gym.
-- Shopping at Poké Marts.
-- Choosing which move to forget when learning a new one. Right now it keeps its old moves.
-- Puzzles (Rocket Hideout spinners, Silph Co. teleporters, boulder pushing).
-- Twitch chat interaction (viewers giving hints or voting).
-- FireRed v1.1 and LeafGreen.
+- **Walking anywhere:** doors, stairs, map exits, ledges, tall grass, talking to people, checking objects.
+- **Battles:** she picks Fight (and which move), Bag, Switch Pokémon or Run. She answers the game's battle
+  questions herself ("Use next Pokémon?", "Delete a move to learn…?").
+- **Every menu**, read straight from memory with the real option names:
+  - the Start menu (Pokémon, Bag, Save…)
+  - the Bag, with its pockets and USE/GIVE/TOSS
+  - the TM Case, for teaching moves (including HMs like Cut, Surf and Strength)
+  - the party screen and its actions (Summary, Switch, field moves)
+  - the move-forgetting screen
+  - Poké Mart buy lists with prices and quantities
+  - every yes/no question and conversation choice
+- **Catching Pokémon:** Bag → Poké Balls in a wild battle. She names what she catches.
+- **Field moves:** Cut a small tree, Surf on water, push boulders with Strength. In FireRed you just
+  face the obstacle and answer "yes", once a Pokémon knows the move and you have the right badge.
+- **Naming:** she types her own, her rival's and her Pokémon's names.
+- **Memory:** a journal, lessons, places, what people said, her goals and mood, all lasting for months.
+
+**Known rough edges** (to be tuned from real stream logs):
+- Puzzle areas (Rocket Hideout spin tiles, Silph Co. teleporters, boulder puzzles) depend on her
+  experimenting. She can, but it may take her a long time.
+- Menus not listed above (Pokédex, trainer card, options, PC boxes) open fine. When the code can't read a
+  screen, it backs out with B.
+- FireRed v1.1 and LeafGreen aren't supported yet.
 
 ## Project layout
 
@@ -237,6 +249,7 @@ pokeplay/
   pathfinding.py            BFS pathfinding (walls, ledges, water, NPCs)
   overworld.py              builds the action list and carries out actions
   battle.py                 battle menus; she picks, it presses; learns from battle messages
+  menus.py                  reads any on-screen menu (options + cursor) and navigates it
   memory.py                 her long-term memory (journal, places, people, lessons, stats)
   brain.py                  local AI via Ollama: decisions + commentary
   narrator.py               text-to-speech (Windows voice or Piper)

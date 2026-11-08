@@ -28,13 +28,14 @@ EFFECT_PHRASES = [
 
 @dataclass
 class Choice:
-    kind: str            # "move" or "run"
+    kind: str            # "move", "bag", "switch" or "run"
     index: int = 0       # move slot
 
 
 # chooser(info, labels) -> index into labels
 Chooser = Callable[[BattleInfo, list[str], list[Choice]], int]
 PartyChooser = Callable[[list[tuple[int, Mon]]], int]
+YesNoChooser = Callable[[str], bool]   # question -> True for YES
 
 
 @dataclass
@@ -43,6 +44,7 @@ class BattlePilot:
     game: Game
     chooser: Chooser | None = None
     party_chooser: PartyChooser | None = None
+    yesno_chooser: YesNoChooser | None = None
     lessons: list[str] = field(default_factory=list)   # observations for her journal
     events: list[str] = field(default_factory=list)
     _pending: Choice | None = None
@@ -51,6 +53,7 @@ class BattlePilot:
     _last_move: str = ""
     _party_target: int | None = None
     _party_attempts: int = 0
+    _answered: tuple[str, str] = ("", "")   # (question, key to press)
 
     def reset(self) -> None:
         self._pending = None
@@ -78,6 +81,11 @@ class BattlePilot:
         if not choices and info.player:
             labels.append("Fight (no PP left on any move)")
             choices.append(Choice("move", 0))
+        if allow_run is not None:
+            labels.append("Open your Bag (items, Poké Balls)")
+            choices.append(Choice("bag"))
+            labels.append("Switch to a different Pokémon")
+            choices.append(Choice("switch"))
         if allow_run:
             labels.append("Try to run away")
             choices.append(Choice("run"))
@@ -85,7 +93,7 @@ class BattlePilot:
 
     def _decide(self, allow_run: bool) -> Choice:
         info = self.game.battle_info()
-        labels, choices = self._choices(info, allow_run and not info.is_trainer)
+        labels, choices = self._choices(info, (allow_run and not info.is_trainer) if allow_run else None)
         if self.chooser is None or len(choices) == 1:
             return choices[0]
         idx = self.chooser(info, labels, choices)
@@ -98,10 +106,11 @@ class BattlePilot:
         if want == "action":
             if self._pending is None:
                 self._pending = self._decide(allow_run=True)
-            target = ACTION_RUN if self._pending.kind == "run" else ACTION_FIGHT
+            target = {"run": ACTION_RUN, "bag": ACTION_BAG, "switch": ACTION_POKEMON}.get(
+                self._pending.kind, ACTION_FIGHT)
             self._move_cursor(A.gActionSelectionCursor, target)
             self.emu.press("A", hold=2, wait=10)
-            if self._pending.kind == "run":
+            if self._pending.kind != "move":
                 self._pending = None
         elif want == "move":
             if self._pending is None or self._pending.kind != "move":
@@ -112,8 +121,15 @@ class BattlePilot:
         elif want == "target":
             self.emu.press("A", hold=2, wait=10)
         else:
-            # Text, animations, yes/no boxes.
-            self.emu.press("A", hold=2, wait=12)
+            # Text and animations: A. Questions ("Use next Pokémon?", "Delete a move?"): she decides.
+            msg = self._last_msg
+            if msg.endswith("?") and self.yesno_chooser:
+                if self._answered[0] != msg:
+                    self.emu.wait_frames(30)      # let the YES/NO box appear first
+                    self._answered = (msg, "A" if self.yesno_chooser(msg) else "B")
+                self.emu.press(self._answered[1], hold=2, wait=14)
+            else:
+                self.emu.press("A", hold=2, wait=12)
 
     # ------------------------------------------------------------------ learning
     def _watch_messages(self) -> None:

@@ -56,7 +56,9 @@ def test_she_chooses_the_move():
     # She sees names, types and PP, but no power or effectiveness hints.
     assert seen["labels"][0] == "Use MOVE33 (Normal type, 35 PP left)"
     assert seen["labels"][1] == "Use MOVE55 (Water type, 25 PP left)"
-    assert seen["labels"][2] == "Try to run away"
+    assert seen["labels"][2].startswith("Open your Bag")
+    assert seen["labels"][3] == "Switch to a different Pokémon"
+    assert seen["labels"][4] == "Try to run away"
     assert not any("effective" in l for l in seen["labels"])
     assert presses[-1] == "A"
     set_input(g, A.HandleInputChooseMove)

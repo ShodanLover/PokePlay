@@ -15,6 +15,7 @@ from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
+from .menus import Menu, MenuReader
 from .naming import MAX_CHARS, NamingScreen
 from .narrator import Narrator
 from .overlay.server import OverlayState, start_overlay
@@ -44,7 +45,9 @@ class Agent:
         self.naming = NamingScreen(self.emu)
         self.world = Overworld(self.emu, self.game, self.memory)
         self.pilot = BattlePilot(self.emu, self.game, chooser=self._choose_battle_action,
-                                 party_chooser=self._choose_next_pokemon)
+                                 party_chooser=self._choose_next_pokemon, yesno_chooser=self._answer_battle_question)
+        self.menus = MenuReader(self.emu, self.game)
+        self._in_menus = False          # she opened something; escape unknown screens with B
 
         self.history: collections.deque[str] = collections.deque(maxlen=10)
         self.pick_counts: collections.Counter[str] = collections.Counter()
@@ -147,29 +150,38 @@ class Agent:
             self._on_mode_change(self._prev_mode, mode)
             self._prev_mode = mode
 
-        if mode == "battle":
+        menu = self.menus.read() if mode != "naming" else None
+        if menu is not None:
+            self._menu_turn(menu)
+        elif mode == "battle":
             self.pilot.step()
             self._absorb_battle_lessons()
         elif mode == "party_menu":
-            self.pilot.party_menu()
+            self.pilot.party_menu()      # fallback if the party screen isn't readable yet
         elif mode == "dialog":
             self._dialog()
         elif mode == "overworld":
             self._dialog_presses = 0
+            self._in_menus = False
             self._overworld_turn()
         elif mode in ("summary", "bag"):
-            self.emu.press("B", hold=2, wait=12)
+            self.emu.wait_frames(20)
+            self._other_loops += 1
+            if self._other_loops % 4 == 0:
+                self.emu.press("B", hold=2, wait=12)
         elif mode == "naming":
             self._name_something()
         else:
-            # Screen transitions, title screen, evolution, etc.
+            # Screen transitions, title screen, evolution, or a screen she opened (Pokédex, trainer card...).
             self._other_loops += 1
             if self._other_loops % 6 == 0:
-                self.emu.press("A", hold=2, wait=10)
+                # Inside menus she opened: B backs out. Otherwise A moves things along
+                # (never B by default: B would cancel an evolution).
+                self.emu.press("B" if self._in_menus else "A", hold=2, wait=10)
             else:
                 self.emu.wait_frames(10)
 
-        if mode != "other":
+        if mode not in ("other", "summary", "bag"):
             self._other_loops = 0
         if mode != "naming":
             self._named_this_screen = False
@@ -317,6 +329,39 @@ class Agent:
         d = self.brain.decide(context, labels)
         self._apply_decision(d, labels[d.choice])
         return d.choice
+
+    def _answer_battle_question(self, question: str) -> bool:
+        context = self._memory_text(short=True) + f"\n\nIN BATTLE, the game asks: \"{question}\""
+        if self.cfg.voice.wait_for_voice:
+            self.narrator.wait_until_quiet()
+        d = self.brain.decide(context, ["YES", "NO"])
+        self._apply_decision(d, f"Answered {'YES' if d.choice == 0 else 'NO'} to: {question}")
+        return d.choice == 0
+
+    # ------------------------------------------------------------------ menus (hers)
+    def _menu_turn(self, menu: Menu) -> None:
+        self._in_menus = True
+        if self.game.mode() == "battle" or self._in_battle:
+            msg = self.pilot._last_msg or self._last_message
+        else:
+            msg = self.game.message() or self._last_message
+        self.menus.last_message = msg
+        if menu.kind in ("yesno", "multichoice") and msg:
+            menu.title = f'The game asks: "{msg}"'
+        options = menu.all_options()
+        cursor = f" (the cursor is on: {options[menu.cursor]})" if 0 <= menu.cursor < len(options) else ""
+        context = (self._memory_text(short=True) + f"\n\nON SCREEN: {menu.title}{cursor}\n"
+                   "You navigate menus one choice at a time, like using a controller.")
+        if self.cfg.voice.wait_for_voice:
+            self.narrator.wait_until_quiet()
+        self.overlay.update(thought="Thinking...")
+        d = self.brain.decide(context, options)
+        label = options[d.choice]
+        self._apply_decision(d, f"{menu.title[:60]} -> {label}")
+        done = self.menus.choose(menu, d.choice)
+        self.history.append(f"Menu ({menu.title[:70]}): chose {done}")
+        if menu.kind == "yesno" and "?" in msg:
+            self.memory.add_journal(f'When asked "{msg[:100]}", you answered {label}.')
 
     def _absorb_battle_lessons(self) -> None:
         while self.pilot.lessons:
