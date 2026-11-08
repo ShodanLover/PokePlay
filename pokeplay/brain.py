@@ -229,14 +229,25 @@ class Brain:
     def _recent_block(self) -> str:
         if not self.recent_said:
             return ""
+        worn = self.worn_topics()
         return ("\n\nTHINGS YOU SAID OUT LOUD RECENTLY (say something fresh: don't reuse these phrases, "
-                "jokes or sentence openings):\n" + "\n".join(f'- "{s}"' for s in list(self.recent_said)[-10:]))
+                "jokes or sentence openings):\n" + "\n".join(f'- "{s}"' for s in list(self.recent_said)[-10:])
+                + (f"\n\nYOU'VE SAID THESE WORDS TOO MUCH, SO DON'T USE THEM NOW: {', '.join(sorted(worn))}" if worn else ""))
+
+    def worn_topics(self) -> set[str]:
+        """Distinctive words in at least 3 of her last 6 spoken lines: she's been going on about these."""
+        counts: collections.Counter[str] = collections.Counter()
+        for said in list(self.recent_said)[-6:]:
+            counts.update({w for w in _words(said) if len(w) >= 4 and w not in COMMON_WORDS})
+        return {word for word, times in counts.items() if times >= 3}
 
     def is_repeat(self, text: str, lenient: bool = False) -> bool:
         """True if this line is basically something she just said. Lenient only rejects near-copies."""
         t = text.lower()
+        if set(_words(text)) & self.worn_topics():
+            return True
         if lenient:
-            return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.85
+            return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.7
                        for old in list(self.recent_said)[-5:])
         phrases, opening = _phrases(text), _opening(text)
         return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.62

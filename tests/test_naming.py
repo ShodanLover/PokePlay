@@ -416,6 +416,28 @@ def test_headline_is_an_occasional_aside(monkeypatch):
     assert "Team" not in b._system()                        # never part of how she decides
 
 
+def test_no_progress_forces_what_she_has_tried_least(tmp_path):
+    from types import SimpleNamespace as Opt
+
+    agent, _ = _named_agent(tmp_path)
+    door, person, menu = Opt(key="door", kind="warp"), Opt(key="person", kind="talk"), Opt(key="menu", kind="menu")
+    agent.pick_counts.update({"door": 4, "person": 1})
+    assert agent._prefer_untried([door, person, menu]) == [door, person, menu]      # free choice while she's progressing
+    agent._actions_since_discovery = 6
+    assert agent._prefer_untried([door, person, menu]) == [person]
+
+
+def test_overused_words_are_named_and_blocked():
+    from pokeplay.brain import Brain
+
+    b = Brain("http://x", "m")
+    for line in ("My turnip is weird.", "Still thinking about that turnip.", "One more turnip thought."):
+        b.remember_said(line)
+    assert b.worn_topics() == {"turnip"} and "DON'T USE THEM NOW: turnip" in b._recent_block()
+    assert b.is_repeat("That turnip again, honestly.", lenient=True)
+    assert not b.is_repeat("There's a sign by the fence over here.", lenient=True)
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

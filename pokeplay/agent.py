@@ -31,7 +31,8 @@ REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
 MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
-REPEAT_LIMIT = 3            # the same action this many times in her last 6 means it isn't working
+STALE_AFTER = 6             # map decisions with no new place, door or person before she must try what she's tried least
+REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
 LONG_SILENCE = 20          # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
@@ -597,6 +598,14 @@ class Agent:
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         self.memory.save()
 
+    def _prefer_untried(self, options: list) -> list:
+        """No progress for a while? Then she can only pick from what she's tried least, so she works through it all."""
+        if self._actions_since_discovery < STALE_AFTER:
+            return options
+        choices = [o for o in options if o.kind != "menu"] or options
+        fewest = min(self.pick_counts[o.key] for o in choices)
+        return [o for o in choices if self.pick_counts[o.key] == fewest]
+
     def _record_outcome(self, key: str, outcome: str) -> None:
         """If something couldn't be done at all (like walking into water), stop offering it for a while."""
         if outcome in ("stuck", "no_path"):
@@ -653,7 +662,7 @@ class Agent:
             self._menu_cooldown -= 1
         if hide_menu:
             options = [o for o in options if o.kind != "menu"] or options
-        options = self._drop_worn_out(options)
+        options = self._prefer_untried(self._drop_worn_out(options))
 
         lines = []
         for o in options:

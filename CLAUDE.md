@@ -36,6 +36,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
   is no longer spoken). She doesn't greet or address viewers: she can't see them. "Ugh" is stripped from her speech, and lines with "chaos"/"chaotic" aren't
   spoken. Style rules are in `brain.py` (`DEFAULT_STYLE`), and the `speaking_style` config overrides them.
+- **Unattended play:** no game-specific hints. General rules keep her moving: impossible actions disappear, repeated
+  ones rest, and after 6 decisions without anything new she can only pick what she's tried least (`_prefer_untried`).
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
 - **Voice:** Kokoro **`af_heart`** (installed via `python -m pokeplay --get-voice kokoro:af_heart`).
   Voice volume ~80-85; the game volume is turned down in the Windows volume mixer.
