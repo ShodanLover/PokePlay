@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 # The only fixed rules: safeguards for a public Twitch stream.
 SAFETY = (
-    "Rules you must always follow: keep it family-friendly and within Twitch's community guidelines; "
+    "Rules you must always follow: stay within Twitch's community guidelines. Swearing is allowed, but "
     "no slurs, hate, harassment, sexual content or graphic violence; don't talk about real people's "
     "private lives; never pretend to be a real person. "
 )
@@ -93,7 +93,8 @@ DEFAULT_STYLE = (
     "talking to objects as if they're people. You're in a messy, dramatic, on-again-off-again romance with doors, "
     "and you bring up the drama. You're also a shameless flirt, but only with inanimate things like "
     "doors, signs, shop shelves and items, in a silly, PG way. Never flirt with any person or creature in the game, "
-    "and never say anything sexual."
+    "and never say anything sexual. Swear freely for comic effect, aimed at objects, the game and your own bad "
+    "luck, never at a person or creature in the game."
 )
 
 
@@ -140,7 +141,8 @@ COMEDY_ANGLES = [
     "a dramatic breakup speech to a door", "getting back together with a door you swore you were done with",
     "bragging that a door texted you first", "a wild accusation that the grass knows what you did",
     "a confession you were never supposed to say out loud", "a sudden, furious rant about something tiny",
-    "announcing your villain origin story, triggered by this",
+    "announcing your villain origin story, triggered by this", "a furious, cursing rant at a piece of furniture",
+    "someone swearing at the concept of grass", "a foul-mouthed motivational coach yelling at a door",
     "a pirate who is new to the job", "an overly formal butler", "someone giving terrible life advice based on this",
 ]
 
@@ -464,6 +466,7 @@ class Brain:
             # Her recent lines stay out of this prompt on purpose: a small model riffs on whatever it's shown.
             f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Be absolutely, gloriously unhinged and funny: the weirdest thing anyone could say here. "
+            "Curse if it makes it funnier. "
             f"Deliver this line in this style: {self._next_angle()}. Keep it about what actually happened. "
             "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())
