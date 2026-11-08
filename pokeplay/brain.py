@@ -193,7 +193,8 @@ class Brain:
             + (f"Your personality: {self.personality} " if self.personality else "")
             + "You are fully in control of the game; you choose from a numbered list of actions. "
             + FIRST_TIMER
-            + "You set your own goals. You think out loud for your viewers, in first person, fully in "
+            + "You can't see any viewers or chat, so never greet them or talk to them. "
+            "You set your own goals. You think out loud to yourself, in first person, fully in "
             "your own voice and personality. Just talk: never start a line with your own name or a "
             "label like 'Name:', and don't refer to yourself in the third person. "
             + f"How you talk: {self.style} "
@@ -224,7 +225,7 @@ class Brain:
             f"{context}{self._recent_block()}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
             "Reply with JSON only: "
             '{"thought": "your reasoning, 1-2 sentences", '
-            '"say": "think out loud to chat in 1-3 short spoken sentences: what you notice and why you chose this", '
+            '"say": "think out loud in 1-3 short spoken sentences: what you notice and why you chose this", '
             '"choice": <action number>, '
             '"note": "optional: something you learned that is worth writing in your journal, or empty", '
             '"goal": "optional: your new goal if you want to change it, or empty"}'
@@ -354,16 +355,10 @@ class Brain:
             print(f"[brain] condense failed: {e}")
             return entries[-keep:]
 
-    def greet(self, context: str = "") -> str:
-        """Her own opening line for the stream (the one place her catchphrase is suggested)."""
-        hint = f" Your catchphrase is \"{self.catchphrase}\" if you feel like using it." if self.catchphrase else ""
-        return self.comment(["The stream just started and viewers are arriving. Say hello however you like." + hint],
-                            context)
-
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
             f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
-            "\n\nReact out loud to your viewers in one or two short spoken sentences (under 35 words total). "
+            "\n\nReact out loud to yourself in one or two short spoken sentences (under 35 words total). "
             "No emojis, no hashtags, no quotation marks. "
             'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
         )

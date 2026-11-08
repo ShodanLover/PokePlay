@@ -192,6 +192,8 @@ class MenuReader:
         if kind == "bag":
             pocket = self.emu.u16(A.gBagMenuState + 6)
             menu.title = f"Your Bag is open on the {BAG_POCKETS[pocket] if pocket < 3 else '?'} pocket."
+            if all(label.upper() == "CANCEL" for label in labels):
+                menu.title += " There's nothing in it."
             menu.data["pocket"] = pocket
             menu.data["pocket_options_from"] = len(menu.options)
             for p, name in enumerate(BAG_POCKETS):

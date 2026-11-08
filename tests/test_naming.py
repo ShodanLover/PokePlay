@@ -204,6 +204,45 @@ def test_overused_words_are_not_spoken(tmp_path):
     assert said == ["That door looks suspicious."]
 
 
+def _menu_agent(tmp_path):
+    from pokeplay.brain import Decision
+
+    agent, _ = _named_agent(tmp_path)
+    agent.pressed, agent.prompts = [], []
+    agent.emu.press = lambda key, **kw: agent.pressed.append(key)
+    agent.game.mode = lambda: "overworld"
+    agent.game.message = lambda: ""
+    agent._memory_text = lambda short=False: "MEMORY"
+    agent.menus.choose = lambda menu, i: menu.all_options()[i]
+    agent.brain.decide = lambda context, lines: agent.prompts.append(lines) or Decision("thinking", "", 0)
+    return agent
+
+
+def test_menu_circles_get_broken(tmp_path):
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    menu = Menu("start", "The main menu is open.", ["BAG", "SAVE"])
+    agent._menu_turn(menu)
+    agent._menu_turn(menu)
+    assert agent.pressed == []
+    agent._menu_turn(menu)                                  # third time: she's going in circles
+    assert "already picked this 2 times" in agent.prompts[2][0]
+    assert agent.pressed == ["B"] and agent._leaving_menus
+    agent._menu_turn(menu)                                  # keeps backing out without asking her
+    assert agent.pressed == ["B", "B"] and len(agent.prompts) == 3
+
+
+def test_questions_the_game_asks_are_never_cut_off(tmp_path):
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    question = Menu("multichoice", "Which one?", ["This", "That"])
+    for _ in range(5):
+        agent._menu_turn(question)
+    assert agent.pressed == [] and not agent._leaving_menus and len(agent.prompts) == 5
+
+
 def test_twitch_channel_reaches_overlay(tmp_path):
     agent, _ = _named_agent(tmp_path)
     assert json.loads(agent.overlay.snapshot())["twitch_channel"] == ""

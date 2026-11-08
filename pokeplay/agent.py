@@ -27,6 +27,9 @@ BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported
 MAX_TALK_OPTIONS = 5
 REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
+BROWSING_MENUS = {"start", "bag", "tm", "list"}   # menus she opened herself, as opposed to questions the game asks
+MENU_LOOP_LIMIT = 3         # picking the same thing this many times without leaving means she's going in circles
+MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
 
 
 class Agent:
@@ -56,6 +59,9 @@ class Agent:
 
         self.history: collections.deque[str] = collections.deque(maxlen=10)
         self.pick_counts: collections.Counter[str] = collections.Counter()
+        self._menu_picks: collections.Counter[tuple[str, str]] = collections.Counter()   # since she last left the menus
+        self._leaving_menus = False
+        self._menu_cooldown = 0         # map decisions until the main menu is offered again
         self._events: queue.Queue[str] = queue.Queue()
         self._context = ""
         self._last_message = ""
@@ -92,9 +98,6 @@ class Agent:
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         if self.cfg.commentary.enabled:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
-        hello = self.brain.greet(self._memory_text())
-        if hello:
-            self._speak(hello)
 
     def _wait_for_brain(self, first: bool = False) -> None:
         delay = 10
@@ -384,6 +387,10 @@ class Agent:
     # ------------------------------------------------------------------ menus (hers)
     def _menu_turn(self, menu: Menu) -> None:
         self._in_menus = True
+        browsing = menu.kind in BROWSING_MENUS and not self._in_battle
+        if browsing and self._leaving_menus:
+            self.emu.press("B", hold=2, wait=20)
+            return
         if self.game.mode() == "battle" or self._in_battle:
             msg = self.pilot._last_msg or self._last_message
         else:
@@ -395,11 +402,26 @@ class Agent:
         cursor = f" (the cursor is on: {options[menu.cursor]})" if 0 <= menu.cursor < len(options) else ""
         context = (self._memory_text(short=True) + f"\n\nON SCREEN: {menu.title}{cursor}\n"
                    "You navigate menus one choice at a time, like using a controller.")
+        lines = list(options)
+        if browsing:
+            for i, option in enumerate(options):
+                n = self._menu_picks[(menu.title[:60], option)]
+                if n:
+                    lines[i] += f" [you've already picked this {n} time{'s' if n > 1 else ''} just now]"
         self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
-        d = self.brain.decide(context, options)
+        d = self.brain.decide(context, lines)
         label = options[d.choice]
         self._apply_decision(d, f"{menu.title[:60]} -> {label}")
+        if browsing:
+            self._menu_picks[(menu.title[:60], label)] += 1
+            if self._menu_picks[(menu.title[:60], label)] >= MENU_LOOP_LIMIT:
+                print("[agent] going round in circles in the menus; closing them")
+                self.history.append("You kept going round in circles in the menus, so you closed them.")
+                self._leaving_menus = True
+                self._menu_cooldown = MENU_COOLDOWN
+                self.emu.press("B", hold=2, wait=20)
+                return
         done = self.menus.choose(menu, d.choice)
         self.history.append(f"Menu ({menu.title[:70]}): chose {done}")
         if menu.kind == "yesno" and "?" in msg:
@@ -552,6 +574,8 @@ class Agent:
         self.memory.save()
 
     def _overworld_turn(self) -> None:
+        self._menu_picks.clear()
+        self._leaving_menus = False
         s = self.game.state()
         self.world.mark_visited(s)
         map_key = f"{s.map_group}.{s.map_num}"
@@ -573,6 +597,9 @@ class Agent:
         talks = sorted((o for o in options if o.kind == "talk"), key=lambda o: o.distance)[:MAX_TALK_OPTIONS]
         options = [o for o in options if o.kind != "talk"] + talks
         options.sort(key=lambda o: (KIND_ORDER.get(o.kind, 9), o.distance))
+        if self._menu_cooldown > 0:                 # she just got stuck in there: go do something else for a bit
+            self._menu_cooldown -= 1
+            options = [o for o in options if o.kind != "menu"] or options
 
         lines = []
         for o in options:
