@@ -28,6 +28,28 @@ FIRST_TIMER = (
 )
 
 
+# Pieces of Pokémon names: a first-timer couldn't pick a streamer name built from these.
+POKEMON_NAME_BITS = ("pika", "poke", "poké", "chu", "eevee", "bulba", "squirt", "charmand", "charizard",
+                     "mew", "jiggly", "snorlax", "gengar", "psyduck", "togep", "ketchum", "trainer")
+
+
+def looks_pokemon_derived(name: str) -> bool:
+    n = name.lower().replace(" ", "")
+    return any(bit in n for bit in POKEMON_NAME_BITS)
+
+
+def clean_spoken(text: str, name: str = "") -> str:
+    """Tidy a line before the voice reads it: no 'Name:' script labels, no *action* asterisks, no quotes."""
+    text = " ".join(text.split()).strip().strip('"').strip()
+    labels = [re.escape(name)] if name else []
+    labels += [r"me", r"streamer", r"ai", r"narrator", r"say", r"says"]
+    pattern = r"^\**\s*(?:" + "|".join(labels) + r")\s*\**\s*[:\-–—]\s*"
+    for _ in range(2):
+        text = re.sub(pattern, "", text, flags=re.I)
+    text = text.replace("*", "")
+    return text.strip().strip('"').strip()
+
+
 class BrainOffline(RuntimeError):
     """Ollama can't be reached; the agent waits and retries instead of acting blindly."""
 
@@ -117,7 +139,8 @@ class Brain:
             + "You are fully in control of the game; you choose from a numbered list of actions. "
             + FIRST_TIMER
             + "You set your own goals. You think out loud for your viewers, in first person, fully in "
-            "your own voice and personality. "
+            "your own voice and personality. Just talk: never start a line with your own name or a "
+            "label like 'Name:', and don't refer to yourself in the third person. "
             + SAFETY
         )
 
@@ -171,8 +194,9 @@ class Brain:
         prompt = (
             f"You are an AI about to start your very own Twitch channel where you play Pokémon FireRed "
             f"and think out loud. You are {hint}. Everything else about you is your choice. "
-            "Choose your own streamer name (easy to say out loud, not a real person's name and not a "
-            "Pokémon character's name), describe your own personality in one sentence, and pick a catchphrase. "
+            "Choose your own streamer name (easy to say out loud, not a real person's name, and not based "
+            "on anything from Pokémon, since you've never heard of it), describe your own personality in one "
+            "sentence, and pick a catchphrase. "
             'Reply with JSON: {"name": "...", "personality": "...", "catchphrase": "..."}'
         )
         for _ in range(3):
@@ -180,6 +204,9 @@ class Brain:
                 data = json.loads(_extract_json(self._chat([{"role": "user", "content": prompt}],
                                                            fmt=schema, max_tokens=150)))
                 name = " ".join(str(data.get("name", "")).split())[:24]
+                if name and looks_pokemon_derived(name):
+                    print(f"[brain] '{name}' sounds like it came from Pokémon; asking again")
+                    continue
                 if name:
                     return {"name": name, "personality": str(data.get("personality", "")).strip(),
                             "catchphrase": str(data.get("catchphrase", "")).strip()}

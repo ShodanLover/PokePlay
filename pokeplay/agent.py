@@ -10,7 +10,7 @@ import time
 
 from . import addresses as A
 from .battle import BattlePilot, Choice, hp_bar
-from .brain import Brain, BrainOffline
+from .brain import Brain, BrainOffline, clean_spoken
 from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
@@ -271,7 +271,7 @@ class Agent:
 
     def _speak(self, text: str) -> None:
         """Say a line out loud, unless it's basically a repeat of something she just said."""
-        text = " ".join(text.split())
+        text = clean_spoken(text, self.brain.name)
         if not text:
             return
         if self.brain.is_repeat(text):

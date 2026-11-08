@@ -133,3 +133,15 @@ def test_repeats_are_filtered():
     assert b.is_repeat("Happy Monday chaos gremlins, let's do this!")
     assert not b.is_repeat("Ooh, a door. What could possibly go wrong?")
     assert "Happy Monday" in b._recent_block()
+
+
+def test_clean_spoken_removes_name_labels():
+    from pokeplay.brain import clean_spoken, looks_pokemon_derived
+    assert clean_spoken("PikaPunch: Let's open that door!", "PikaPunch") == "Let's open that door!"
+    assert clean_spoken("**PikaPunch:** *gasps* A DOOR!", "PikaPunch") == "gasps A DOOR!"
+    assert clean_spoken('"Ooh, shiny."', "Nova") == "Ooh, shiny."
+    assert clean_spoken("Say: hi chat", "Nova") == "hi chat"
+    # Her name in the middle of a sentence is left alone.
+    assert clean_spoken("They call me Nova for a reason.", "Nova") == "They call me Nova for a reason."
+    assert looks_pokemon_derived("PikaPunch") and looks_pokemon_derived("Poke Queen")
+    assert not looks_pokemon_derived("Nova Static")
