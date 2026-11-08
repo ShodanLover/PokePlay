@@ -72,6 +72,31 @@ DEFAULT_STYLE = (
 )
 
 
+# Everyday words that don't make a phrase distinctive ("I need to find a" isn't a repeated joke).
+COMMON_WORDS = frozenset(
+    "a an and are at be but can could did do does for from get go going got had has have here hope how i i'll i'm i've if "
+    "in into is it it's just know let's like look looks maybe me might more my need next no not now of ok okay on one or "
+    "out really see should so some than that that's the then there this time to too try up was we well what when where "
+    "which why will with wow would yeah you".split())
+
+
+def _words(text: str) -> list[str]:
+    return re.findall(r"[a-z']+", text.lower().replace("’", "'"))
+
+
+def _phrases(text: str, length: int = 4) -> set[tuple[str, ...]]:
+    """Runs of words that are distinctive enough to notice if she says them again."""
+    words = _words(text)
+    runs = (tuple(words[i:i + length]) for i in range(len(words) - length + 1))
+    return {r for r in runs if sum(w not in COMMON_WORDS for w in r) >= 2}
+
+
+def _opening(text: str) -> tuple[str, ...]:
+    """Her first two words, if they're distinctive (like "Blinking bag!")."""
+    first = tuple(_words(text)[:2])
+    return first if len(first) == 2 and not set(first) & COMMON_WORDS else ()
+
+
 # Words she leaned on until they got old. Lines using them are thought, not said.
 OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b", re.I)
 
@@ -115,7 +140,7 @@ class Brain:
         self.personality = personality
         self.style = DEFAULT_STYLE
         self.catchphrase = ""
-        self.recent_said: collections.deque[str] = collections.deque(maxlen=10)
+        self.recent_said: collections.deque[str] = collections.deque(maxlen=30)
         self.temperature = temperature
         self.context_tokens = context_tokens
         self.timeout = timeout
@@ -179,12 +204,16 @@ class Brain:
         if not self.recent_said:
             return ""
         return ("\n\nTHINGS YOU SAID OUT LOUD RECENTLY (say something fresh: don't reuse these phrases, "
-                "jokes or sentence openings):\n" + "\n".join(f'- "{s}"' for s in self.recent_said))
+                "jokes or sentence openings):\n" + "\n".join(f'- "{s}"' for s in list(self.recent_said)[-10:]))
 
     def is_repeat(self, text: str) -> bool:
         """True if this line is basically something she just said."""
         t = text.lower()
-        return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.72 for old in self.recent_said)
+        phrases, opening = _phrases(text), _opening(text)
+        return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.62
+                   or phrases & _phrases(old)
+                   or (opening and opening == _opening(old))
+                   for old in self.recent_said)
 
     def remember_said(self, text: str) -> None:
         self.recent_said.append(text[:200])

@@ -237,6 +237,19 @@ def test_repeats_are_filtered():
     assert "Happy Monday" in b._recent_block()
 
 
+def test_reused_phrases_and_openings_count_as_repeats():
+    from pokeplay.brain import Brain
+    b = Brain("http://x", "m")
+    b.remember_said("Blinking bag! I think this pocket has the ball. Hope it's not a weird rock this time!")
+    assert b.is_repeat("Off we go to the next pocket, hope it's not a weird rock again.")     # same phrase
+    assert b.is_repeat("Blinking bag! Maybe it wants something from me.")                     # same opening
+    # Ordinary sentence pieces shouldn't silence her.
+    assert not b.is_repeat("I think I need to talk to that person by the fence.")
+    for i in range(29):
+        b.remember_said(f"filler {i}")
+    assert any("Blinking" in s for s in b.recent_said) and "Blinking" not in b._recent_block()   # prompt stays short
+
+
 def test_clean_spoken_removes_name_labels():
     from pokeplay.brain import clean_spoken, looks_pokemon_derived
     assert clean_spoken("PikaPunch: Let's open that door!", "PikaPunch") == "Let's open that door!"
