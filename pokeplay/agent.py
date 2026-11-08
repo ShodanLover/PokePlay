@@ -22,7 +22,7 @@ from .hints import hint_for
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
-from .overworld import Overworld
+from .overworld import BLOCKED_EXIT, Overworld
 
 KIND_ORDER = {"warp": 0, "exit": 1, "talk": 2, "train": 3, "explore": 4}
 BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported away",
@@ -32,7 +32,8 @@ REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
 MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
-HINT_EVERY = 15             # map decisions between hints about what to do next
+NO_TURNING_BACK = 6         # map decisions in a new place before she may go back the way she came
+HINT_EVERY = 15            # map decisions between hints about what to do next
 HINT_LASTS = 4              # how many map decisions each hint stays in her mind
 GOAL_PATIENCE = 15         # decisions with no discovery before her current goal is dropped
 EVENT_MAX_AGE = 10         # seconds after which something that happened is too old to react to
@@ -90,6 +91,8 @@ class Agent:
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
         self._hint_clock = -1
+        self._came_from = ""                        # the place she was in before this one
+        self._decisions_here = 0
         self._snapshot: dict | None = None          # what she last knew about, to spot what changed
         self._changes: list[str] = []
         self._decisions_on_goal = 0                 # decisions since her goal changed or she found something new
@@ -685,6 +688,12 @@ class Agent:
                 changes.append(f"You used or lost {item} (now {after}).")
         return changes
 
+    def _no_turning_back(self, options: list) -> list:
+        """Just arrived somewhere? She has to give it a go before heading straight back the way she came."""
+        if self._decisions_here >= NO_TURNING_BACK or not self._came_from:
+            return options
+        return [o for o in options if self.memory.links.get(o.key) != self._came_from] or options
+
     def _prefer_untried(self, options: list) -> list:
         """No progress for a while? Then she can only pick from what she's tried least, so she works through it all."""
         if self._actions_since_discovery < STALE_AFTER:
@@ -730,7 +739,10 @@ class Agent:
         if self.memory.visit(map_key, s.map_name):
             self._discovered()
             self._event(f"You arrived somewhere new: {s.map_name}.")
+        self._decisions_here += 1
         if self._last_map != map_key:
+            self._came_from = self.memory.places.get(self._last_map, "")
+            self._decisions_here = 0
             self._last_map = map_key
             self.overlay.log(f"📍 {s.map_name}")
         self.overlay.update(location=s.map_name, badges=s.badges, money=s.money)
@@ -750,7 +762,7 @@ class Agent:
             self._menu_cooldown -= 1
         if hide_menu:
             options = [o for o in options if o.kind != "menu"] or options
-        options = self._prefer_untried(self._drop_worn_out(options))
+        options = self._prefer_untried(self._no_turning_back(self._drop_worn_out(options)))
 
         lines = []
         for o in options:
@@ -779,6 +791,7 @@ class Agent:
         self.memory.bump("steps", self.world.steps_taken - steps_before)
         self._record_outcome(opt.key, result.outcome)
         if opt.kind == "exit" and result.outcome == "stuck":     # a proven fact, not a guess, so it's worth keeping
+            self.memory.links[opt.key] = BLOCKED_EXIT
             self.memory.add_lesson(f"{s.map_name}: you can't leave by the {opt.label.split(' side')[0].split()[-1]} side.")
         if opt.kind in ("warp", "exit") and result.outcome == "warped":
             if opt.key not in self.memory.links:

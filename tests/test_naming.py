@@ -525,6 +525,38 @@ def test_she_is_told_exactly_what_changed(tmp_path):
         assert expected in changes
 
 
+def test_blocked_exit_is_never_offered_again_on_foot():
+    from types import SimpleNamespace as NS
+    from pokeplay.overworld import BLOCKED_EXIT
+
+    world, state = _house_world()
+    world.game.connections = lambda: [NS(direction="south")]
+    world.memory = NS(links={}, people={})
+    options, _ = world.build_options(state)
+    assert any(o.kind == "exit" for o in options)
+    world.memory.links["4.0|edge:south"] = BLOCKED_EXIT
+    options, _ = world.build_options(state)
+    assert not any(o.kind == "exit" for o in options)
+    state.surfing = True
+    world.game.map_grid().behavior                          # still reachable once she can cross water
+    options, _ = world.build_options(state)
+    assert any(o.kind == "exit" and "haven't been" in o.label for o in options)
+
+
+def test_no_turning_straight_back(tmp_path):
+    from types import SimpleNamespace as Opt
+    from pokeplay.agent import NO_TURNING_BACK
+
+    agent, _ = _named_agent(tmp_path)
+    back, onward = Opt(key="back"), Opt(key="onward")
+    agent.memory.links["back"] = "Old Town"
+    agent._came_from = "Old Town"
+    assert agent._no_turning_back([back, onward]) == [onward]
+    assert agent._no_turning_back([back]) == [back]                 # never left with nothing to do
+    agent._decisions_here = NO_TURNING_BACK
+    assert agent._no_turning_back([back, onward]) == [back, onward]
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

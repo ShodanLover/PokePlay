@@ -15,6 +15,7 @@ from .pathfinding import STEPS, find_path, reachable, walkable
 
 OPPOSITE = {"up": "down", "down": "up", "left": "right", "right": "left"}
 TEMP_BLOCK_SECONDS = 45
+BLOCKED_EXIT = "(blocked)"      # saved in her door links, so it survives restarts
 
 
 def relative(x: int, y: int, tx: int, ty: int) -> str:
@@ -120,6 +121,10 @@ class Overworld:
             best = min(reach, key=lambda t: dist[t])
             key = f"{s.map_group}.{s.map_num}|edge:{c.direction}"
             known = self.memory.links.get(key) if self.memory else None
+            if known == BLOCKED_EXIT:
+                if not s.surfing:           # proven impassable on foot (usually water at the map's edge)
+                    continue
+                known = None
             where = f"leads to {known}" if known else "you haven't been that way yet"
             options.append(Option("exit", f"Leave this area by the {c.direction} side ({where})", key, best,
                                   direction={"north": "up", "south": "down", "west": "left", "east": "right"}[c.direction],
