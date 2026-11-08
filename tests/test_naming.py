@@ -262,6 +262,20 @@ def test_subtitle_appears_when_the_audio_starts(monkeypatch):
     assert events == ["generated", "subtitle: My first Pokémon", "audio"]     # real spelling on screen
 
 
+def test_long_silence_relaxes_the_repeat_check(tmp_path):
+    import time
+
+    agent, _ = _named_agent(tmp_path)
+    agent.narrator.say = lambda text: None
+    assert agent._speak("Blinking bag! I wonder what the little red shelf is for.")
+    similar = "Blinking bag! Maybe the little red shelf does something useful."
+    assert agent._speak(similar) is False                  # she only just spoke
+    agent._last_said = time.time() - 30
+    assert agent._speak(similar) is True                   # silence is worse than a similar line
+    agent._last_said = time.time() - 30
+    assert agent._speak(similar) is False                  # but never an actual copy
+
+
 def test_speak_reports_whether_she_said_it(tmp_path):
     agent, _ = _named_agent(tmp_path)
     agent.narrator.say = lambda text: None

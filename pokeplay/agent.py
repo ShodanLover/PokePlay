@@ -28,7 +28,8 @@ MAX_TALK_OPTIONS = 5
 REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 BROWSING_MENUS = {"start", "bag", "tm", "list"}   # menus she opened herself, as opposed to questions the game asks
-MENU_LOOP_LIMIT = 3         # picking the same thing this many times without leaving means she's going in circles
+LONG_SILENCE = 20           # seconds without a spoken line before the repeat check relaxes
+MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
 
 
@@ -62,6 +63,7 @@ class Agent:
         self._menu_picks: collections.Counter[tuple[str, str]] = collections.Counter()   # since she last left the menus
         self._leaving_menus = False
         self._failed_options: set[str] = set()      # map actions that just didn't work
+        self._last_said = time.time()
         self._menu_cooldown = 0        # map decisions until the main menu is offered again
         self._events: queue.Queue[str] = queue.Queue()
         self._context = ""
@@ -337,10 +339,12 @@ class Agent:
         if OVERUSED_WORDS.search(text):
             print(f"[voice] (skipped overused word) {text}")
             return False
-        if self.brain.is_repeat(text):
+        quiet_too_long = time.time() - self._last_said > LONG_SILENCE     # silence is worse than a similar line
+        if self.brain.is_repeat(text, lenient=quiet_too_long):
             print(f"[voice] (skipped repeat) {text}")
             return False
         self.brain.remember_said(text)
+        self._last_said = time.time()
         self.narrator.say(text)
         return True
 

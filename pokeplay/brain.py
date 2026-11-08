@@ -42,7 +42,7 @@ GAME_SENSE = (
 )
 
 # A journal is for what actually happened. Saved guesses get re-read as facts, and she talks herself in circles.
-GUESSWORK = re.compile(r"\b(?:might|maybe|could|perhaps|probably|possibly|not sure|i think|seems?)\b|\breset|\bglitch",
+GUESSWORK = re.compile(r"\b(?:might|maybe|could|perhaps|probably|possibly|not sure|i think|seems?)\b|\breset|\bglitch|\bconfus|\bon screen\b|\bscreen says\b",
                        re.I)
 
 
@@ -226,9 +226,12 @@ class Brain:
         return ("\n\nTHINGS YOU SAID OUT LOUD RECENTLY (say something fresh: don't reuse these phrases, "
                 "jokes or sentence openings):\n" + "\n".join(f'- "{s}"' for s in list(self.recent_said)[-10:]))
 
-    def is_repeat(self, text: str) -> bool:
-        """True if this line is basically something she just said."""
+    def is_repeat(self, text: str, lenient: bool = False) -> bool:
+        """True if this line is basically something she just said. Lenient only rejects near-copies."""
         t = text.lower()
+        if lenient:
+            return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.85
+                       for old in list(self.recent_said)[-5:])
         phrases, opening = _phrases(text), _opening(text)
         return any(difflib.SequenceMatcher(None, t, old.lower()).ratio() > 0.62
                    or phrases & _phrases(old)
