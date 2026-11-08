@@ -20,7 +20,7 @@ import time
 import wave
 
 
-LINE_MAX_AGE = 10       # seconds a line can wait for its turn before it's too old to say
+LINE_MAX_AGE = 6      # seconds a line can wait for its turn before it's too old to say
 SPELLED_OUT = {"HP", "PP", "TM", "HM", "OK", "TV", "PC", "NES", "AI", "KO"}     # capitals that really are letters
 
 

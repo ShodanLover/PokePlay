@@ -37,7 +37,7 @@ GUIDED_UNTIL_BADGES = 2     # the opening is spelled out for her until she has t
 HINT_EVERY = 15           # map decisions between hints about what to do next
 HINT_LASTS = 4              # how many map decisions each hint stays in her mind
 GOAL_PATIENCE = 15         # decisions with no discovery before her current goal is dropped
-EVENT_MAX_AGE = 10         # seconds after which something that happened is too old to react to
+EVENT_MAX_AGE = 6        # seconds after which something that happened is too old to react to
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
@@ -582,6 +582,9 @@ class Agent:
             parts.append("RECENTLY (oldest first):\n" + "\n".join(f"- {h}" for h in self.history))
         parts.append("WHAT JUST CHANGED (this is real, so react to it):\n" + "\n".join(f"- {c}" for c in self._changes)
                      if self._changes else "WHAT JUST CHANGED: nothing since your last action.")
+        if self._team_badly_hurt(s):
+            parts.append("YOUR TEAM IS BADLY HURT: go to the nearest Pokémon Center and talk to the person at the "
+                         "counter, or go home and talk to Mom, before doing anything else.")
         self._hint_clock += 1
         carrying_parcel = any("PARCEL" in item.upper() for item in s.key_items)
         if carrying_parcel:
@@ -663,6 +666,10 @@ class Agent:
             self.memory.journal = self.brain.condense(self.memory.journal)
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         self.memory.save()
+
+    @staticmethod
+    def _team_badly_hurt(s: GameState) -> bool:
+        return bool(s.party) and sum(m.hp for m in s.party) * 3 < sum(m.max_hp for m in s.party)
 
     def _note_changes(self, s: GameState) -> list[str]:
         """Exactly what changed since her last look: she can't see the screen, so this is what she reacts to."""

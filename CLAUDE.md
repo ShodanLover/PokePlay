@@ -42,6 +42,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Unattended play:** general rules keep her moving: impossible actions disappear, repeated ones rest, after 6
   decisions without anything new she can only pick what she's tried least (`_prefer_untried`), and a goal with no
   progress for 15 decisions is dropped along with the notes feeding it.
+- **Tone update (owner's request):** more unhinged and a bit flirty. The flirting stays silly, PG and aimed only at
+  inanimate things: the game's human characters are children and the stream is family-friendly.
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
 - **Voice:** Kokoro **`af_heart`** (installed via `python -m pokeplay --get-voice kokoro:af_heart`).
   Voice volume ~80-85; the game volume is turned down in the Windows volume mixer.

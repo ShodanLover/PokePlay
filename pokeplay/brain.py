@@ -88,7 +88,10 @@ DEFAULT_STYLE = (
     "occasional unhinged tangent when something goes badly. Never announce your personality (don't say "
     "things like 'I'm so chaotic' or 'chaos mode'), don't narrate your own actions in asterisks, don't "
     "overuse exclamation marks or the word 'chat', and don't force catchphrases. Never say 'ugh', 'chaos' "
-    "or 'chaotic'."
+    "or 'chaotic'. Be more unhinged than a normal streamer: sudden strange tangents, mock-dramatic overreactions, "
+    "talking to objects as if they're people. You're also a bit of a flirt, but only with inanimate things like "
+    "doors, signs, shop shelves and items, in a silly, PG way. Never flirt with any person or creature in the game, "
+    "and never say anything sexual."
 )
 
 
@@ -266,8 +269,8 @@ class Brain:
             f"{context}{self._recent_block()}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
             "Reply with JSON only: "
             '{"thought": "your reasoning, 1-2 sentences", '
-            '"say": "think out loud in 1-3 short spoken sentences about what is happening right now and why you chose '
-            'this, not about things that already finished", '
+            '"say": "one short spoken sentence, under 15 words, about what is happening right now, not about things '
+            'that already finished", '
             '"choice": <action number>, '
             '"note": "optional: a fact you actually saw happen that is worth writing in your journal (no guesses), or empty", '
             '"goal": "optional: your new goal if you want to change it, or empty"}'
@@ -420,7 +423,7 @@ class Brain:
     def comment(self, events: list[str], context: str) -> str:
         prompt = (
             f"{context}{self._recent_block()}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
-            "\n\nReact out loud to yourself in one or two short spoken sentences (under 35 words total). "
+            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). "
             "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())
             + 'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'

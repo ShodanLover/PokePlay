@@ -565,6 +565,15 @@ def test_no_turning_straight_back(tmp_path):
     assert agent._no_turning_back([back, onward]) == [back, onward]
 
 
+def test_badly_hurt_team_is_noticed():
+    from types import SimpleNamespace as NS
+    from pokeplay.agent import Agent
+
+    assert Agent._team_badly_hurt(NS(party=[NS(hp=3, max_hp=24)]))
+    assert not Agent._team_badly_hurt(NS(party=[NS(hp=20, max_hp=24)]))
+    assert not Agent._team_badly_hurt(NS(party=[]))
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 
