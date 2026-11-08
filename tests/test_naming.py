@@ -438,6 +438,38 @@ def test_overused_words_are_named_and_blocked():
     assert not b.is_repeat("There's a sign by the fence over here.", lenient=True)
 
 
+def test_lines_that_waited_too_long_are_not_said():
+    import time
+    from pokeplay.narrator import Narrator
+
+    said = []
+    n = Narrator("none", on_speak=said.append)
+    n._q.put((time.time() - 60, "That level up a minute ago!"))
+    n.wait_until_quiet(1)
+    time.sleep(0.2)
+    assert said == []
+    n.say("Something just happened.")
+    time.sleep(0.2)
+    assert said == ["Something just happened."]
+
+
+def test_old_events_get_no_reaction(tmp_path):
+    import threading
+    import time
+
+    agent, _ = _named_agent(tmp_path)
+    agent.cfg.commentary.max_silence_seconds = 0
+    asked = []
+    agent.brain.comment = lambda events, ctx: asked.append(events) or ""
+    agent._events.put((time.time() - 60, "Grew to level 6 a minute ago."))
+    threading.Thread(target=agent._commentary_worker, daemon=True).start()
+    time.sleep(1.5)
+    assert asked == []
+    agent._queue_comment("Just grew to level 7.")
+    time.sleep(3.5)
+    assert asked and asked[0] == ["Just grew to level 7."]
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

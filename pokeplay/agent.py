@@ -31,7 +31,8 @@ REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
 MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
-STALE_AFTER = 6             # map decisions with no new place, door or person before she must try what she's tried least
+EVENT_MAX_AGE = 10          # seconds after which something that happened is too old to react to
+STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
 LONG_SILENCE = 20          # seconds without a spoken line before the repeat check relaxes
@@ -316,7 +317,10 @@ class Agent:
         self.overlay.log(text)
         self.history.append(text)
         if self.cfg.commentary.enabled:
-            self._events.put(text)
+            self._queue_comment(text)
+
+    def _queue_comment(self, text: str) -> None:
+        self._events.put((time.time(), text))
 
     def _commentary_worker(self) -> None:
         last = 0.0
@@ -343,7 +347,10 @@ class Agent:
             wait = self.cfg.commentary.min_seconds_between - (time.time() - last)
             if wait > 0:
                 time.sleep(wait)
-            line = self.brain.comment(batch[-3:], self._context)
+            fresh = [text for when, text in batch if time.time() - when <= EVENT_MAX_AGE]
+            if not fresh:                       # reacting now would be talking about something long over
+                continue
+            line = self.brain.comment(fresh[-3:], self._context)
             if line:
                 self._speak(line)
                 last = time.time()
@@ -494,7 +501,7 @@ class Agent:
             self.history.append(f'On screen: "{short}"')
             self.overlay.log(f'💬 {short}')
             if self.cfg.commentary.enabled:
-                self._events.put(f'Text on screen: "{short}"')
+                self._queue_comment(f'Text on screen: "{short}"')
             self._dialog_presses = 0
         self._dialog_presses += 1
         # Mostly A to advance text; an occasional B closes menus we didn't mean to open.

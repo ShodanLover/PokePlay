@@ -20,6 +20,7 @@ import time
 import wave
 
 
+LINE_MAX_AGE = 10       # seconds a line can wait for its turn before it's too old to say
 SPELLED_OUT = {"HP", "PP", "TM", "HM", "OK", "TV", "PC", "NES", "AI", "KO"}     # capitals that really are letters
 
 
@@ -36,7 +37,7 @@ def pronounceable(text: str) -> str:
 
 class Narrator:
     def __init__(self, engine: str = "windows", piper_model: str = "", rate: int = 0,
-                 max_queue: int = 3, on_speak=None, on_done=None, gender: str = "female", volume: int = 100,
+                 max_queue: int = 1, on_speak=None, on_done=None, gender: str = "female", volume: int = 100,
                  voice_name: str = "", piper_exe: str = "piper/piper.exe", kokoro_voice: str = "af_heart",
                  speed: float = 1.0):
         self.engine = engine
@@ -53,7 +54,7 @@ class Narrator:
         self._kokoro = None
         self._subtitle = ""
         self.last_spoke = time.time()
-        self._q: queue.Queue[str] = queue.Queue()
+        self._q: queue.Queue[tuple[float, str]] = queue.Queue()
         self._max_queue = max_queue
         self._busy = threading.Event()
         self._piper_voice = None
@@ -69,7 +70,7 @@ class Narrator:
                 self._q.get_nowait()
             except queue.Empty:
                 break
-        self._q.put(text)
+        self._q.put((time.time(), text))
 
     def is_speaking(self) -> bool:
         return self._busy.is_set() or not self._q.empty()
@@ -82,9 +83,12 @@ class Narrator:
     # ------------------------------------------------------------------ worker
     def _run(self) -> None:
         while True:
-            text = self._q.get()
+            queued_at, text = self._q.get()
             self._busy.set()
             try:
+                if time.time() - queued_at > LINE_MAX_AGE:      # she'd be talking about something long over
+                    print(f"[voice] (skipped, too late) {text}")
+                    continue
                 self.last_spoke = time.time()
                 self._subtitle = text           # shown when the audio starts, not while it's being generated
                 print(f"[voice] {text}")
