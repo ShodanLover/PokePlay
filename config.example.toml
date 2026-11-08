@@ -33,6 +33,8 @@ rate = 1                  # Windows voice speed, -10 (slow) to 10 (fast)
 gender = "female"         # Windows voice: "female" or "male"
 volume = 85               # her voice volume, 0-100
 voice_name = ""           # pick a specific Windows voice; see: python -m pokeplay --list-voices
+kokoro_voice = "af_heart" # when engine = "kokoro" (the most natural free voices)
+speed = 1.0               # Kokoro speaking speed
 wait_for_voice = true     # finish talking before choosing the next action
 
 [overlay]

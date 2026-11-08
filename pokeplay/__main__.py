@@ -64,16 +64,23 @@ def main() -> int:
     if args.test_voice is not None:
         from .narrator import Narrator
         v = cfg.voice
-        engine, model = v.engine, v.piper_model
-        if args.test_voice:                      # preview a specific Piper voice without switching
-            from .voices import download_voice
-            path = download_voice(args.test_voice)
-            if path is None:
-                return 1
-            engine, model = "piper", path.as_posix()
+        engine, model, speaker = v.engine, v.piper_model, v.kokoro_voice
+        if args.test_voice:                      # preview a voice without switching to it
+            from .voices import download_voice, install_kokoro, parse_kokoro
+            kokoro = parse_kokoro(args.test_voice)
+            if kokoro is not None:
+                if not kokoro or not install_kokoro():
+                    print("Unknown or unavailable Kokoro voice; see --list-voices")
+                    return 1
+                engine, speaker = "kokoro", kokoro
+            else:
+                path = download_voice(args.test_voice)
+                if path is None:
+                    return 1
+                engine, model = "piper", path.as_posix()
             print(f"Previewing '{args.test_voice}'. To keep it:  python -m pokeplay --get-voice {args.test_voice}")
-        n = Narrator(engine, model, v.rate, gender=v.gender, volume=v.volume,
-                     voice_name=v.voice_name, piper_exe=v.piper_exe)
+        n = Narrator(engine, model, v.rate, gender=v.gender, volume=v.volume, voice_name=v.voice_name,
+                     piper_exe=v.piper_exe, kokoro_voice=speaker, speed=v.speed)
         n.say("Hi! This is what I sound like. Is this too loud, or just right?")
         time.sleep(0.5)
         n.wait_until_quiet(30)

@@ -38,6 +38,8 @@ class VoiceConfig:
     volume: int = 85            # her voice volume, 0-100
     voice_name: str = ""        # a specific Windows voice (see: python -m pokeplay --list-voices)
     piper_exe: str = "piper/piper.exe"
+    kokoro_voice: str = "af_heart"   # see: python -m pokeplay --list-voices
+    speed: float = 1.0               # Kokoro speaking speed (0.8 slower - 1.2 faster)
     wait_for_voice: bool = True
 
 

@@ -42,7 +42,8 @@ class Agent:
                                  on_speak=lambda t: self.overlay.update(say=t, subtitle=t),
                                  on_done=lambda: self.overlay.update(subtitle=""),
                                  gender=cfg.voice.gender, volume=cfg.voice.volume,
-                                 voice_name=cfg.voice.voice_name, piper_exe=cfg.voice.piper_exe)
+                                 voice_name=cfg.voice.voice_name, piper_exe=cfg.voice.piper_exe,
+                                 kokoro_voice=cfg.voice.kokoro_voice, speed=cfg.voice.speed)
         self.naming = NamingScreen(self.emu)
         self.world = Overworld(self.emu, self.game, self.memory)
         self.pilot = BattlePilot(self.emu, self.game, chooser=self._choose_battle_action,

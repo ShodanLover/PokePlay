@@ -22,7 +22,8 @@ import wave
 class Narrator:
     def __init__(self, engine: str = "windows", piper_model: str = "", rate: int = 0,
                  max_queue: int = 3, on_speak=None, on_done=None, gender: str = "female", volume: int = 100,
-                 voice_name: str = "", piper_exe: str = "piper/piper.exe"):
+                 voice_name: str = "", piper_exe: str = "piper/piper.exe", kokoro_voice: str = "af_heart",
+                 speed: float = 1.0):
         self.engine = engine
         self.piper_model = piper_model
         self.rate = rate
@@ -32,6 +33,9 @@ class Narrator:
         self.volume = max(0, min(100, int(volume)))
         self.voice_name = voice_name
         self.piper_exe = piper_exe
+        self.kokoro_voice = kokoro_voice
+        self.speed = speed
+        self._kokoro = None
         self.last_spoke = time.time()
         self._q: queue.Queue[str] = queue.Queue()
         self._max_queue = max_queue
@@ -73,6 +77,8 @@ class Narrator:
                     self._speak_windows(text)
                 elif self.engine == "piper":
                     self._speak_piper(text)
+                elif self.engine == "kokoro":
+                    self._speak_kokoro(text)
                 else:
                     time.sleep(min(6.0, 0.06 * len(text)))   # give viewers time to read it
             except Exception as e:  # noqa: BLE001
@@ -104,6 +110,29 @@ class Narrator:
         )
         subprocess.run(["powershell", "-NoProfile", "-Command", script], input=text.encode("utf-8"),
                        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), check=False)
+
+    def _speak_kokoro(self, text: str) -> None:
+        if self._kokoro is None:
+            from kokoro_onnx import Kokoro          # installed by: python -m pokeplay --get-voice kokoro
+            from .voices import KOKORO_MODEL, KOKORO_VOICES
+            self._kokoro = Kokoro(KOKORO_MODEL, KOKORO_VOICES)
+        samples, rate = self._kokoro.create(text, voice=self.kokoro_voice, speed=self.speed, lang="en-us")
+        import numpy as np                      # comes with kokoro-onnx
+        pcm = (np.clip(samples * (self.volume / 100.0), -1.0, 1.0) * 32767).astype("<i2")
+        fd, path = tempfile.mkstemp(suffix=".wav")
+        os.close(fd)
+        try:
+            with wave.open(path, "wb") as w:
+                w.setnchannels(1)
+                w.setsampwidth(2)
+                w.setframerate(rate)
+                w.writeframes(pcm.tobytes())
+            _play_wav(path)
+        finally:
+            try:
+                os.remove(path)
+            except OSError:
+                pass
 
     def _speak_piper(self, text: str) -> None:
         fd, path = tempfile.mkstemp(suffix=".wav")

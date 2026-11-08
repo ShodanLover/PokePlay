@@ -185,7 +185,22 @@ See what's available:
 python -m pokeplay --list-voices
 ```
 
-**Better-sounding free voices (Piper).** Download one and switch to it with a single command, e.g.:
+**Most natural free voices (Kokoro, recommended).** Preview, then switch:
+
+```bash
+python -m pokeplay --test-voice kokoro:af_heart
+```
+
+```bash
+python -m pokeplay --get-voice kokoro:af_heart
+```
+
+Other Kokoro voices: `af_bella`, `af_sky`, `af_jessica`, `af_nicole`, `af_sarah`, `af_nova`, `af_river`
+(American); `bf_emma`, `bf_isabella`, `bf_alice`, `bf_lily` (British). The first time, it installs the
+Kokoro engine and downloads its model (~350 MB). It runs on your CPU, faster than real time.
+`speed` in `config.toml` makes her talk faster or slower.
+
+**Smaller, more robotic voices (Piper).** Download one and switch to it with a single command, e.g.:
 
 ```bash
 python -m pokeplay --get-voice amy

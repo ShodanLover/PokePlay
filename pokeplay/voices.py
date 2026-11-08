@@ -17,6 +17,28 @@ from pathlib import Path
 
 BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en"
 PIPER_EXE_ZIP = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
+KOKORO_FILES = "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+KOKORO_MODEL = "voices/kokoro-v1.0.onnx"
+KOKORO_VOICES = "voices/voices-v1.0.bin"
+
+# Kokoro: much more natural free voices. name -> description
+KOKORO_SPEAKERS = {
+    "af_heart": "American, warm and expressive (best overall)",
+    "af_bella": "American, lively",
+    "af_nicole": "American, soft and close (ASMR-ish)",
+    "af_sarah": "American, clear and friendly",
+    "af_sky": "American, light",
+    "af_nova": "American, bright",
+    "af_jessica": "American, casual",
+    "af_river": "American, relaxed",
+    "af_aoede": "American, smooth",
+    "af_kore": "American, steady",
+    "af_alloy": "American, neutral",
+    "bf_emma": "British, warm",
+    "bf_isabella": "British, polished",
+    "bf_alice": "British, crisp",
+    "bf_lily": "British, gentle",
+}
 
 # Free Piper voices (female, English). Short name -> (folder path, file stem, description)
 PIPER_VOICES = {
@@ -48,7 +70,11 @@ def list_voices() -> int:
         print("   ", v)
     if not voices:
         print("    (none found, or not on Windows)")
-    print("\nFree Piper voices (better quality). Install one with:  python -m pokeplay --get-voice NAME")
+    print("\nKokoro voices (most natural, recommended). Preview:  python -m pokeplay --test-voice kokoro:af_heart")
+    print("                                             Use one:  python -m pokeplay --get-voice kokoro:af_heart")
+    for name, desc in KOKORO_SPEAKERS.items():
+        print(f"    kokoro:{name:12s} {desc}")
+    print("\nPiper voices (smaller, more robotic). Install one with:  python -m pokeplay --get-voice NAME")
     for name, (_, stem, desc) in PIPER_VOICES.items():
         installed = " [installed]" if (Path("voices") / f"{stem}.onnx").exists() else ""
         print(f"    {name:9s} {desc}{installed}")
@@ -96,6 +122,37 @@ def set_config_values(path: str, section: str, values: dict) -> None:
     p.write_text(text, encoding="utf-8")
 
 
+def install_kokoro() -> bool:
+    """Install the Kokoro voice engine (Python package + ~350 MB of model files)."""
+    import importlib.util
+    if importlib.util.find_spec("kokoro_onnx") is None:
+        print("Installing the Kokoro voice engine (one time)...")
+        cmd = [sys.executable, "-m", "pip", "install", "kokoro-onnx"]
+        if sys.version_info >= (3, 14):
+            cmd.append("--ignore-requires-python")   # it works on 3.14; the package is just labeled conservatively
+        if subprocess.run(cmd).returncode != 0:
+            print("Couldn't install kokoro-onnx. Paste the error above to get help.")
+            return False
+    os.makedirs("voices", exist_ok=True)
+    try:
+        for path in (KOKORO_MODEL, KOKORO_VOICES):
+            if not Path(path).exists():
+                print("(this is a big download, about 350 MB total)" if path == KOKORO_MODEL else "", end="")
+                _download(f"{KOKORO_FILES}/{Path(path).name}", Path(path))
+    except OSError as e:
+        print(f"Download failed: {e}")
+        return False
+    return True
+
+
+def parse_kokoro(name: str) -> str | None:
+    """'kokoro' or 'kokoro:af_bella' -> speaker name (or None if not a Kokoro voice)."""
+    if not name.lower().startswith("kokoro"):
+        return None
+    speaker = name.split(":", 1)[1] if ":" in name else "af_heart"
+    return speaker if speaker in KOKORO_SPEAKERS else ""
+
+
 def download_voice(name: str) -> Path | None:
     """Make sure a Piper voice (and the Piper program) is on disk. Returns the model path."""
     name = name.lower()
@@ -119,6 +176,16 @@ def download_voice(name: str) -> Path | None:
 
 
 def get_voice(name: str, config_path: str = "config.toml") -> int:
+    speaker = parse_kokoro(name)
+    if speaker is not None:
+        if not speaker:
+            print(f"Unknown Kokoro voice. Choose one of: {', '.join(KOKORO_SPEAKERS)}")
+            return 1
+        if not install_kokoro():
+            return 1
+        set_config_values(config_path, "voice", {"engine": "kokoro", "kokoro_voice": speaker})
+        print(f"Done! She now uses Kokoro '{speaker}' ({KOKORO_SPEAKERS[speaker]}). Restart PokePlay to hear it.")
+        return 0
     model = download_voice(name)
     if model is None:
         return 1
