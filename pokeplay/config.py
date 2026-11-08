@@ -63,7 +63,15 @@ def load_config(path: str | Path) -> Config:
     if not path.exists():
         print(f"No {path} found, using defaults (copy config.example.toml to config.toml to customize).")
         return cfg
-    data = tomllib.loads(path.read_text(encoding="utf-8"))
+    # "utf-8-sig" also accepts the invisible marker (BOM) that Notepad/PowerShell often add.
+    text = path.read_text(encoding="utf-8-sig")
+    try:
+        data = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        raise SystemExit(
+            f"\nThere's a problem in {path}: {e}\n"
+            "Easiest fix: delete config.toml and run start.bat again (it makes a fresh copy).\n"
+        ) from None
     for section in fields(cfg):
         values = data.get(section.name, {})
         target = getattr(cfg, section.name)
