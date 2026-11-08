@@ -264,7 +264,8 @@ class Brain:
             f"{context}{self._recent_block()}\n\nACTIONS YOU CAN TAKE:\n{numbered}\n\n"
             "Reply with JSON only: "
             '{"thought": "your reasoning, 1-2 sentences", '
-            '"say": "think out loud in 1-3 short spoken sentences: what you notice and why you chose this", '
+            '"say": "think out loud in 1-3 short spoken sentences about what is happening right now and why you chose '
+            'this, not about things that already finished", '
             '"choice": <action number>, '
             '"note": "optional: a fact you actually saw happen that is worth writing in your journal (no guesses), or empty", '
             '"goal": "optional: your new goal if you want to change it, or empty"}'
