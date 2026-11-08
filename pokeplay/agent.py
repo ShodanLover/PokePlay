@@ -12,14 +12,14 @@ import time
 
 from . import addresses as A
 from .battle import BattlePilot, Choice, hp_bar
-from .brain import COMMON_WORDS, GUESSWORK, OVERUSED_WORDS, Brain, BrainOffline, _words, clean_spoken
+from .brain import COMMON_WORDS, GUESSWORK, NOT_FOR_STREAM, OVERUSED_WORDS, Brain, BrainOffline, _words, clean_spoken
 from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
 from .menus import Menu, MenuReader
 from .naming import MAX_CHARS, NamingScreen, clean_name
-from .hints import hint_for, target_for
+from .hints import arrived, hint_for, target_for
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
@@ -385,6 +385,9 @@ class Agent:
         text = clean_spoken(text, self.brain.name)
         if not text:
             return False
+        if NOT_FOR_STREAM.search(text):
+            print(f"[voice] (skipped, not for stream) {text}")
+            return False
         if OVERUSED_WORDS.search(text):
             print(f"[voice] (skipped overused word) {text}")
             return False
@@ -722,7 +725,14 @@ class Agent:
         """In the guided opening, the exit or door for her next step is the one she takes. [] if there isn't one."""
         if s.badges >= GUIDED_UNTIL_BADGES:
             return []
-        want = target_for(self._next_step(s), s.map_name)
+        step = self._next_step(s)
+        if arrived(step, s.map_name):                   # in the right place: stay and talk to people, least-tried first
+            people = [o for o in options if o.kind == "talk"]
+            if not people:
+                return []
+            fewest = min(self.pick_counts[o.key] for o in people)
+            return [o for o in people if self.pick_counts[o.key] == fewest]
+        want = target_for(step, s.map_name)
         if not want:
             return []
         return [o for o in options if (o.kind == "exit" and o.label.startswith(f"Leave this area by the {want} side"))
@@ -804,7 +814,8 @@ class Agent:
         if hide_menu:
             options = [o for o in options if o.kind != "menu"] or options
         options = self._drop_worn_out(options)
-        options = self._follow_route(options, s) or self._prefer_untried(self._no_turning_back(options))
+        route = self._follow_route(options, s)
+        options = route or self._prefer_untried(self._no_turning_back(options))
 
         lines = []
         for o in options:
@@ -823,7 +834,8 @@ class Agent:
         opt = options[decision.choice]
         self._apply_decision(decision, opt.label)
         self.pick_counts[opt.key] += 1
-        self._note_pick(opt.key)
+        if not route:                       # following the route isn't "retrying the same thing"
+            self._note_pick(opt.key)
         self._actions_since_discovery += 1
 
         steps_before = self.world.steps_taken

@@ -144,7 +144,12 @@ COMEDY_ANGLES = [
     "a pirate who is new to the job", "an overly formal butler", "someone giving terrible life advice based on this",
 ]
 
-COMMENT_TEMPERATURE = 1.1   # wilder than her decisions, which stay at the normal setting
+COMMENT_TEMPERATURE = 1.25  # wilder than her decisions, which stay at the normal setting
+
+# She runs unattended on a public stream in a game full of child characters, at a high randomness setting.
+NOT_FOR_STREAM = re.compile(
+    r"\b(?:sex\w*|naked|nude|horny|aroused|erotic|pregnan\w*|baby with|in bed|bedroom|seduc\w*|moan\w*|undress\w*"
+    r"|strip\w*|thigh\w*|boob\w*|breast\w*|lingerie|making love|make love)\b", re.I)
 
 OBSESSION_CHANCE = 0.1    # how often a spoken comment includes her running bit (1 in 10)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
@@ -458,7 +463,7 @@ class Brain:
         prompt = (
             # Her recent lines stay out of this prompt on purpose: a small model riffs on whatever it's shown.
             f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
-            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Be completely unhinged and funny. "
+            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Be absolutely, gloriously unhinged and funny: the weirdest thing anyone could say here. "
             f"Deliver this line in this style: {self._next_angle()}. Keep it about what actually happened. "
             "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())

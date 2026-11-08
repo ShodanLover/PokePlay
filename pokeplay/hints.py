@@ -34,7 +34,7 @@ MISTY = "In Cerulean City, heal at the Pokémon Center, then go into the Gym and
 ROUTE = {
     TO_VIRIDIAN: {"Pallet Town": "north", "Route 1": "north"},
     GET_PARCEL: {"Viridian City": "Viridian City - Mart"},
-    PARCEL: {"Viridian City": "south", "Route 1": "south", "Pallet Town": "Professor Oak's Lab"},
+    PARCEL: {"Viridian City": "south", "Route 1": "south", "Pallet Town": "Pallet Town - Professor Oak's Lab"},
     TO_FOREST: {"Pallet Town": "north", "Route 1": "north", "Viridian City": "north",
                 "Route 2": "Viridian Forest - South Entrance",
                 "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"},
@@ -44,14 +44,24 @@ ROUTE = {
 }
 
 
+# The buildings where a step's job gets done, by the game's full map names.
+DESTINATIONS = {GET_PARCEL: "Viridian City - Mart", PARCEL: "Pallet Town - Professor Oak's Lab",
+                BROCK: "Pewter City - Gym"}
+
+
 def target_for(step: str, place: str) -> str:
     """The exit direction or door name she should take now, or "" to leave it up to her."""
     route = ROUTE.get(step)
-    if not route or place in route.values():    # no route for this step, or she's arrived: talk, fight, explore
+    if not route or arrived(step, place):       # no route for this step, or she's arrived: talk, fight, explore
         return ""
     if place in route:
         return route[place]
     return place.split(" - ")[0] if " - " in place else ""      # inside the wrong building: back outside
+
+
+def arrived(step: str, place: str) -> bool:
+    """She's at the place this step needs, so the job now is talking or fighting, not leaving."""
+    return DESTINATIONS.get(step) == place
 
 
 def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str], delivered: bool) -> str:

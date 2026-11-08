@@ -619,7 +619,9 @@ def test_route_targets_for_the_opening():
     assert h.target_for(h.GET_PARCEL, "Viridian City") == "Viridian City - Mart"
     assert h.target_for(h.GET_PARCEL, "Viridian City - House") == "Viridian City"      # wrong building: back out
     assert h.target_for(h.GET_PARCEL, "Viridian City - Mart") == ""                    # arrived
-    assert h.target_for(h.PARCEL, "Pallet Town") == "Professor Oak's Lab"
+    assert h.target_for(h.PARCEL, "Pallet Town") == "Pallet Town - Professor Oak's Lab"
+    assert h.target_for(h.PARCEL, "Pallet Town - Professor Oak's Lab") == ""           # arrived, so she stays
+    assert h.target_for(h.THROUGH_FOREST, "Route 2") == "north"                        # passing through, not arrived
     assert h.target_for(h.TO_VIRIDIAN, "Pallet Town - Player's House - 2F") == "Pallet Town"
     assert h.target_for(h.MISTY, "Cerulean City") == ""                                # no set route here
 
@@ -637,6 +639,27 @@ def test_she_takes_the_door_for_her_next_step(tmp_path):
     assert agent._follow_route([house, north], state) == []                             # door not reachable: her call
     state.badges = 2
     assert agent._follow_route([house, mart, north], state) == []                       # guided part is over
+
+
+def test_once_at_the_destination_she_talks_instead_of_leaving(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    door = NS(kind="warp", label="door", dest="Pallet Town", key="out")
+    oak, aide = NS(kind="talk", label="t", dest="", key="oak"), NS(kind="talk", label="t", dest="", key="aide")
+    state = NS(badges=0, party=[1], key_items=["OAK'S PARCEL"], map_name="Pallet Town - Professor Oak's Lab")
+    assert agent._follow_route([door, oak, aide], state) == [oak, aide]
+    agent.pick_counts["aide"] = 2
+    assert agent._follow_route([door, oak, aide], state) == [oak]
+
+
+def test_unsuitable_lines_are_not_spoken(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    said = []
+    agent.narrator.say = said.append
+    assert agent._speak("I think I'm having a baby with the door.") is False
+    assert agent._speak("That door is shamelessly handsome and I'm furious about it.") is True
+    assert len(said) == 1
 
 
 def test_impossible_actions_stop_being_offered(tmp_path):
