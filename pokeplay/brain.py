@@ -132,6 +132,10 @@ COMEDY_ANGLES = [
     "someone deeply suspicious of whatever is nearest", "someone taking this as a personal insult",
     "a business pitch nobody asked for", "a flirty line to the nearest inanimate object",
     "a love confession to a piece of furniture or scenery", "a game show host", "an auctioneer",
+    "a shameless pickup line aimed at a nearby sign or door", "someone swooning over a shop shelf",
+    "a jealous lover accusing a door of seeing other people", "a wedding proposal to the nearest tree",
+    "someone completely losing the plot, mid-sentence", "a prophet receiving visions from the grass",
+    "someone arguing with the voices in their inventory", "a screaming sales pitch for doing absolutely nothing",
     "a pirate who is new to the job", "an overly formal butler", "someone giving terrible life advice based on this",
 ]
 
@@ -446,7 +450,7 @@ class Brain:
         prompt = (
             # Her recent lines stay out of this prompt on purpose: a small model riffs on whatever it's shown.
             f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
-            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Make it strange and funny. "
+            "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Be completely unhinged and funny. "
             f"Deliver this line in this style: {self._next_angle()}. Keep it about what actually happened. "
             "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())
