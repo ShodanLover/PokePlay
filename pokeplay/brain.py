@@ -57,7 +57,8 @@ def clean_spoken(text: str, name: str = "") -> str:
         text = text[1:-1].strip()
     elif text[:1] in quotes and sum(text.count(q) for q in quotes) == 1:
         text = text[1:].strip()
-    return text
+    without = re.sub(r"\bu+gh+\b[\s,.!?…—–-]*", "", text, flags=re.I).strip()    # a verbal habit, so it's removed
+    return without[:1].upper() + without[1:] if without != text else text
 
 
 # How she talks. Personality should come through in reactions, not self-description.
@@ -66,9 +67,13 @@ DEFAULT_STYLE = (
     "a bit offbeat rather than loud: dry remarks, honest confusion, small wins treated like big ones, the "
     "occasional unhinged tangent when something goes badly. Never announce your personality (don't say "
     "things like 'I'm so chaotic' or 'chaos mode'), don't narrate your own actions in asterisks, don't "
-    "overuse exclamation marks or the word 'chat', and don't force catchphrases."
+    "overuse exclamation marks or the word 'chat', and don't force catchphrases. Never say 'ugh', 'chaos' "
+    "or 'chaotic'."
 )
 
+
+# Words she leaned on until they got old. Lines using them are thought, not said.
+OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b", re.I)
 
 # Lines that are her repeating her instructions rather than talking to viewers. Never read these out.
 LEAKED_INSTRUCTIONS = re.compile(r"\bthe user\b|\bunder \d+ words\b|\bshort (spoken )?sentences\b|\bin first person\b", re.I)

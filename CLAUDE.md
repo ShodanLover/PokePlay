@@ -26,8 +26,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   empty, or it overrides her choice. New self-chosen names are blocked if they're Pokémon-derived.
 - **Personality:** offbeat, dry humor, gets a little unhinged when things go wrong, but **not cringe**.
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
-  only goes in the stream greeting). Style rules are in `brain.py` (`DEFAULT_STYLE`), and the
-  `speaking_style` config overrides them.
+  only goes in the stream greeting). "Ugh" is stripped from her speech, and lines with "chaos"/"chaotic" aren't
+  spoken. Style rules are in `brain.py` (`DEFAULT_STYLE`), and the `speaking_style` config overrides them.
+- **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
 - **Voice:** Kokoro **`af_heart`** (installed via `python -m pokeplay --get-voice kokoro:af_heart`).
   Voice volume ~80-85; the game volume is turned down in the Windows volume mixer.
 - **She must be able to finish the whole game:** full menu control (bag, TM case, catching, shops,

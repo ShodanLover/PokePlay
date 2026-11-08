@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import queue
+import re
 import subprocess
 import sys
 import tempfile
@@ -17,6 +18,14 @@ import array
 import threading
 import time
 import wave
+
+
+def pronounceable(text: str) -> str:
+    """Respell words the voice gets wrong. Only what she says changes; subtitles keep the real spelling."""
+    text = re.sub(r"\bpok[eé]\s*-?mon", "Pokemon", text, flags=re.I)         # "Pokémon" comes out as "PAH-kay-mun"
+    text = re.sub(r"\bpok[eé]\s*-?dex", "Poh-kay-decks", text, flags=re.I)
+    text = re.sub(r"\bpok[eé]\s*-?(balls?|mart|cent(?:er|re)|flute)\b", r"Pohkay \1", text, flags=re.I)
+    return re.sub(r"\bpoké\b", "Pohkay", text, flags=re.I)                   # plain "poke" is left as a normal word
 
 
 class Narrator:
@@ -73,6 +82,7 @@ class Narrator:
                 if self.on_speak:
                     self.on_speak(text)
                 print(f"[voice] {text}")
+                text = pronounceable(text)
                 if self.engine == "windows":
                     self._speak_windows(text)
                 elif self.engine == "piper":

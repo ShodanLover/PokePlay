@@ -171,7 +171,7 @@ def test_voice_never_holds_up_her_next_thought(tmp_path):
     agent.narrator.wait_until_quiet = lambda timeout: waited.append(timeout)
     agent._speak = said.append
     agent._wait_for_voice()
-    assert waited == [3.0]                              # 7 seconds, minus the time thinking takes
+    assert waited == [2.0]                              # 7 seconds, minus thinking time and a second of slack
 
     agent.narrator.is_speaking = lambda: True
     agent._apply_decision(Decision("hmm", "I wonder", 0), "Go north")
@@ -179,6 +179,29 @@ def test_voice_never_holds_up_her_next_thought(tmp_path):
     agent.narrator.is_speaking = lambda: False
     agent._apply_decision(Decision("hmm", "I wonder", 0), "Go north")
     assert said == ["I wonder"]
+
+
+def test_voice_respells_only_what_it_gets_wrong():
+    from pokeplay.narrator import pronounceable
+    assert pronounceable("My first Pokémon!") == "My first Pokemon!"
+    assert pronounceable("POKéMON and Pokémons") == "Pokemon and Pokemons"
+    assert pronounceable("A Poké Ball, a POKé MART, the Pokédex") == "A Pohkay Ball, a Pohkay MART, the Poh-kay-decks"
+    assert pronounceable("Should I poke it?") == "Should I poke it?"
+
+
+def test_overused_words_are_not_spoken(tmp_path):
+    from pokeplay.brain import clean_spoken
+
+    assert clean_spoken("Ugh, why is this door locked?", "Ziggy") == "Why is this door locked?"
+    assert clean_spoken("Well, ugh... fine.", "Ziggy") == "Well, fine."
+    assert clean_spoken("Ugh!", "Ziggy") == ""
+
+    agent, _ = _named_agent(tmp_path)
+    said = []
+    agent.narrator.say = said.append
+    agent._speak("This is pure chaos.")
+    agent._speak("That door looks suspicious.")
+    assert said == ["That door looks suspicious."]
 
 
 def test_twitch_channel_reaches_overlay(tmp_path):
@@ -228,7 +251,7 @@ def test_clean_spoken_removes_name_labels():
 
 def test_clean_spoken_more_label_styles():
     from pokeplay.brain import clean_spoken
-    assert clean_spoken("PikaPunch says: 'Ugh, so confusing!'", "PikaPunch") == "Ugh, so confusing!"
+    assert clean_spoken("PikaPunch says: 'Hmm, so confusing!'", "PikaPunch") == "Hmm, so confusing!"
     assert clean_spoken('**PikaPunch** yells: "A DOOR!"', "PikaPunch") == "A DOOR!"
 
 

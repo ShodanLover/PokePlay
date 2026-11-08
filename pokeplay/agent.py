@@ -10,7 +10,7 @@ import time
 
 from . import addresses as A
 from .battle import BattlePilot, Choice, hp_bar
-from .brain import Brain, BrainOffline, clean_spoken
+from .brain import OVERUSED_WORDS, Brain, BrainOffline, clean_spoken
 from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
@@ -329,6 +329,9 @@ class Agent:
         text = clean_spoken(text, self.brain.name)
         if not text:
             return
+        if OVERUSED_WORDS.search(text):
+            print(f"[voice] (skipped overused word) {text}")
+            return
         if self.brain.is_repeat(text):
             print(f"[voice] (skipped repeat) {text}")
             return
@@ -512,7 +515,8 @@ class Agent:
     def _wait_for_voice(self) -> None:
         """Let her finish talking, but never so long that she goes too long between thoughts."""
         if self.cfg.voice.wait_for_voice:
-            self.narrator.wait_until_quiet(max(0.0, self.cfg.brain.max_seconds_between_thoughts - self._think_seconds))
+            # One second of slack: thinking time varies from one decision to the next.
+            self.narrator.wait_until_quiet(max(0.0, self.cfg.brain.max_seconds_between_thoughts - self._think_seconds - 1))
         self._think_started = time.time()
 
     def _apply_decision(self, d, action_label: str) -> None:
