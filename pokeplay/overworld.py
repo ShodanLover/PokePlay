@@ -152,8 +152,11 @@ class Overworld:
                     return dist[t]
                 return min(abs(t[0] - vx) + abs(t[1] - vy) for vx, vy in visited)
             candidates = random.sample(list(dist), min(200, len(dist)))
+            unexplored = [t for t in candidates if novelty(t) >= 3]
             far = max(candidates, key=novelty)
-            if novelty(far) >= 3:
+            # Only offer exploring when a real chunk of the area is still unseen
+            # (otherwise she wanders around the corners of a small room forever).
+            if len(unexplored) >= max(6, len(candidates) // 8):
                 options.append(Option("explore", f"Explore the {region(far[0], far[1], grid.width, grid.height)} part of this area, where you haven't walked yet",
                                       f"explore:{s.map_group}.{s.map_num}", far, distance=dist[far]))
         return options, grid

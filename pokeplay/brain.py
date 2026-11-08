@@ -39,15 +39,25 @@ def looks_pokemon_derived(name: str) -> bool:
 
 
 def clean_spoken(text: str, name: str = "") -> str:
-    """Tidy a line before the voice reads it: no 'Name:' script labels, no *action* asterisks, no quotes."""
-    text = " ".join(text.split()).strip().strip('"').strip()
-    labels = [re.escape(name)] if name else []
-    labels += [r"me", r"streamer", r"ai", r"narrator", r"say", r"says"]
-    pattern = r"^\**\s*(?:" + "|".join(labels) + r")\s*\**\s*[:\-–—]\s*"
+    """Tidy a line before the voice reads it.
+
+    Removes script-style labels ("Name:", "Name says:"), *action* asterisks and wrapping quotes,
+    so the voice doesn't read her own name or punctuation out loud."""
+    text = " ".join(text.split()).replace("*", "").strip()
+    labels = "|".join([re.escape(name)] if name else [] + ["me", "streamer", "ai", "narrator"])
+    if name:
+        labels += "|me|streamer|ai|narrator"
+    verbs = "says|said|exclaims|yells|shouts|whispers|screams|thinks|muses|giggles|groans|asks"
+    label_re = re.compile(rf"^(?:{labels})\s*(?:(?:{verbs})\s*)?[:,\-–—]\s*|^(?:{labels})\s+(?:{verbs})\s+|^say\s*:\s*",
+                          re.I)
     for _ in range(2):
-        text = re.sub(pattern, "", text, flags=re.I)
-    text = text.replace("*", "")
-    return text.strip().strip('"').strip()
+        text = label_re.sub("", text).strip()
+    quotes = "'\"‘’“”"
+    if len(text) > 1 and text[0] in quotes and text[-1] in quotes:
+        text = text[1:-1].strip()
+    elif text[:1] in quotes and sum(text.count(q) for q in quotes) == 1:
+        text = text[1:].strip()
+    return text
 
 
 class BrainOffline(RuntimeError):

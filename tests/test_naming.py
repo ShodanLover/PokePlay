@@ -145,3 +145,9 @@ def test_clean_spoken_removes_name_labels():
     assert clean_spoken("They call me Nova for a reason.", "Nova") == "They call me Nova for a reason."
     assert looks_pokemon_derived("PikaPunch") and looks_pokemon_derived("Poke Queen")
     assert not looks_pokemon_derived("Nova Static")
+
+
+def test_clean_spoken_more_label_styles():
+    from pokeplay.brain import clean_spoken
+    assert clean_spoken("PikaPunch says: 'Ugh, so confusing!'", "PikaPunch") == "Ugh, so confusing!"
+    assert clean_spoken('**PikaPunch** yells: "A DOOR!"', "PikaPunch") == "A DOOR!"
