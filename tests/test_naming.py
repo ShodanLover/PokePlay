@@ -720,6 +720,19 @@ def test_battle_math_labels_each_move():
     assert rate_moves(game, NS(player=None, enemy=None)) == {}
 
 
+def test_battles_use_the_strongest_move_without_stopping_to_think(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    asked = []
+    agent.brain.decide = lambda context, lines: asked.append(lines)
+    agent.game.state = lambda: NS(items=[], balls=[], party=[1])
+    info = NS(player=NS(species_name="X", moves=[], summary=lambda: "X"), is_trainer=False, message="",
+              enemy=NS(species_name="Y", level=3, hp=9, max_hp=12, status=""))
+    labels = ["Use A (normal damage)", "Use B (super effective, THE STRONGEST CHOICE)", "Try to run away"]
+    assert agent._choose_battle_action(info, labels, []) == 1 and asked == []
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

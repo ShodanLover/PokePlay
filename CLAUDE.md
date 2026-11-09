@@ -23,7 +23,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   Guesses ("might", "maybe") are not saved to her journal, since she re-reads them as facts.
 - **Running joke (owner's request):** `obsession` in `config.toml` is LeBron James. It only affects what she says,
   never her decisions. The owner wants it only every now and then, and it must stay about his public basketball career.
-- **Real headlines (owner's request):** `news_feeds` in `config.toml`, 1 in 10 comments from a random pool of 40, speech
+- **Real headlines (owner's request):** `news_feeds` in `config.toml`, 1 in 5 comments from a random pool of 40, speech
   only; she should mostly talk about the game. Politics is allowed. She says these live and unattended, so `UNSUITABLE`
   in `news.py` keeps out violence, crime, sexual content, death and illness.
 - **Nothing scripted except safety rules.** All speech is generated live. The only fixed rules are
@@ -50,7 +50,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   doors"). Each comment gets a random style (`COMEDY_ANGLES`), only 15% get a random subject so she mostly reacts to the
   game, and overused words are blocked. Her guide is secret: lines mentioning hints or a walkthrough aren't spoken.
 - **Battle math is done in code** (`rate_moves` in `battle.py`): each move is labeled by effectiveness and the strongest
-  is marked, so she isn't guessing. Decision temperature is 0.3 in `config.toml`; her comments have their own wild setting.
+  is marked, and code just uses it (no model call) unless she could catch something. Decision temperature is 0.3 in `config.toml`; her comments have their own wild setting.
 - **Known routes skip the AI:** when `ROUTE` gives a single exit or door, code takes it without asking the model.
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
 - **Voice:** Kokoro **`af_heart`** (installed via `python -m pokeplay --get-voice kokoro:af_heart`).

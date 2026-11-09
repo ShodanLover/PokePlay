@@ -46,5 +46,5 @@ twitch_channel = ""       # your Twitch channel name, to show chat on the overla
 
 [commentary]
 enabled = true            # react out loud to battles, level ups, etc.
-min_seconds_between = 4
-max_silence_seconds = 5    # if she's been quiet this long, she thinks out loud about what's going on
+min_seconds_between = 6
+max_silence_seconds = 8    # if she's been quiet this long, she thinks out loud about what's going on

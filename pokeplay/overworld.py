@@ -230,7 +230,7 @@ class Overworld:
         """Take one step. Returns 'moved', 'blocked', 'changed' (map/mode changed)."""
         before = self.game.state_light()
         for attempt in range(3):
-            self.emu.press(direction, hold=10, wait=4)
+            self.emu.press(f"{direction}+B", hold=10, wait=4)      # holding B runs, once she has Running Shoes
             self._wait_until_still()
             after = self.game.state_light()
             if after[0] != "overworld" or after[1:3] != before[1:3]:

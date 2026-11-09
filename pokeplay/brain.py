@@ -166,7 +166,7 @@ NOT_FOR_STREAM = re.compile(
 
 OBSESSION_CHANCE = 0.1    # how often a spoken comment includes her running bit (1 in 10)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
-NEWS_CHANCE = 0.1           # how often a spoken comment remarks on a real headline (1 in 10)
+NEWS_CHANCE = 0.2           # how often a spoken comment remarks on a real headline (1 in 5)
 
 # Words she leaned on until they got old. Lines using them are thought, not said.
 OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b|\bglitch", re.I)
@@ -484,7 +484,7 @@ class Brain:
             # Her recent lines stay out of this prompt on purpose: a small model riffs on whatever it's shown.
             f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Be absolutely, gloriously unhinged and funny: the weirdest thing anyone could say here. "
-            "Curse if it makes it funnier. "
+            "Swear in nearly every line (shit, damn, hell, ass, fuck), like someone completely losing it. "
             + self._style_line()
             + "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())

@@ -428,6 +428,12 @@ class Agent:
     def _choose_battle_action(self, info: BattleInfo, labels: list[str], choices: list[Choice]) -> int:
         context = self._battle_context(info)
         self._context = context
+        strongest = next((i for i, label in enumerate(labels) if "THE STRONGEST CHOICE" in label), None)
+        if strongest is not None and not self._catch_nudge(info):       # the math is done, so no need to stop and think
+            self._activity = labels[strongest][:120]
+            print(f"[battle] {labels[strongest]}")
+            self.history.append(f"In battle: {labels[strongest]}")
+            return strongest
         self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
         shown = self._usable_battle_labels(labels)
