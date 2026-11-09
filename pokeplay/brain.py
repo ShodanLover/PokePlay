@@ -102,7 +102,8 @@ COMMON_WORDS = frozenset(
     "a an and are at be but can could did do does for from get go going got had has have here hope how i i'll i'm i've if "
     "in into is it it's just know let's like look looks maybe me might more my need next no not now of ok okay on one or "
     "out really see should so some than that that's the then there this time to too try up was we well what when where "
-    "which why will with wow would yeah you".split())
+    "which why will with wow would yeah you "
+    "shit shitty fuck fucks fucking fucked damn damned damnit hell crap bitch bastard goddamn holy".split())
 
 
 def _words(text: str) -> list[str]:
@@ -145,8 +146,8 @@ COMEDY_ANGLES = [
     "a pirate who is new to the job", "an overly formal butler", "someone giving terrible life advice based on this",
 ]
 
-COMMENT_TEMPERATURE = 1.35  # wilder than her decisions, which stay at the normal setting
-SUBJECT_CHANCE = 0.15       # how often a comment drags in a random object instead of just reacting to the game
+COMMENT_TEMPERATURE = 1.0   # wilder than her decisions; much higher and she stops making sense
+SUBJECT_CHANCE = 0.0        # random objects made her talk nonsense about things that aren't in the game, so they're off
 
 # A different thing to riff on each line. Without this, a small model finds one joke and never lets go.
 RANDOM_SUBJECTS = [

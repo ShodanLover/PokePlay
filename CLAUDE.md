@@ -47,8 +47,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   only at inanimate things, and sexual content stays filtered (`NOT_FOR_STREAM`): the game's human characters are
   children and it runs unattended on a public stream. No slurs, hate or harassment.
 - **Variety:** don't name specific objects in her prompts or show her recent lines: a small model parrots both ("winking
-  doors"). Each comment gets a random style (`COMEDY_ANGLES`), only 15% get a random subject so she mostly reacts to the
-  game, and overused words are blocked. Her guide is secret: lines mentioning hints or a walkthrough aren't spoken.
+  doors"). Each comment gets a random style (`COMEDY_ANGLES`) and must react to the game; random subjects are off because
+  she talked about canoes and such. Overused words are blocked, not counting swear words. Her guide is secret: lines mentioning hints or a walkthrough aren't spoken.
 - **Battle math is done in code** (`rate_moves` in `battle.py`): each move is labeled by effectiveness and the strongest
   is marked, and code just uses it (no model call) unless she could catch something. Decision temperature is 0.3 in `config.toml`; her comments have their own wild setting.
 - **Known routes skip the AI:** when `ROUTE` gives a single exit or door, code takes it without asking the model.

@@ -678,7 +678,7 @@ def test_comments_are_mostly_about_the_game(monkeypatch):
     b = br.Brain("http://x", "m")
     monkeypatch.setattr(br.random, "random", lambda: 0.9)
     assert "random subject" not in b._style_line() and "actually just happened" in b._style_line()
-    monkeypatch.setattr(br.random, "random", lambda: 0.0)
+    monkeypatch.setattr(br, "SUBJECT_CHANCE", 1.0)
     assert "Your random subject" in b._style_line()
 
 
