@@ -357,14 +357,18 @@ class Agent:
 
     def _answer_chat(self) -> bool:
         """Now and then, talk back to a viewer. This only ever affects what she says, never how she plays."""
-        if not self.chat or self.narrator.is_speaking() or time.time() - self._last_chat_reply < CHAT_REPLY_EVERY:
+        if not self.chat or time.time() - self._last_chat_reply < CHAT_REPLY_EVERY:
             return False
         message = self.chat.take()
         if not message:
             return False
         self._last_chat_reply = time.time()
+        print(f"[chat] answering {message[0]}: {message[1]}")
         line = self.brain.reply_to_chat(*message, self._context or "You've only just started playing.")
-        return bool(line) and self._speak(line)
+        if not line:
+            print("[chat] (no usable reply)")
+            return False
+        return self._speak(line, always_fresh=True)                 # a person is waiting: never drop it as a repeat
 
     def _queue_comment(self, text: str) -> None:
         self._events.put((time.time(), text))
@@ -404,7 +408,7 @@ class Agent:
                 self._speak(line)
                 last = time.time()
 
-    def _speak(self, text: str) -> bool:
+    def _speak(self, text: str, always_fresh: bool = False) -> bool:
         """Say a line out loud, unless it's basically a repeat of something she just said. True if it was said."""
         text = clean_spoken(text, self.brain.name)
         if not text:
@@ -416,7 +420,7 @@ class Agent:
             print(f"[voice] (skipped overused word) {text}")
             return False
         quiet_too_long = time.time() - self._last_said > LONG_SILENCE     # silence is worse than a similar line
-        if self.brain.is_repeat(text, lenient=quiet_too_long):
+        if not always_fresh and self.brain.is_repeat(text, lenient=quiet_too_long):
             print(f"[voice] (skipped repeat) {text}")
             return False
         self.brain.remember_said(text)
@@ -472,14 +476,18 @@ class Agent:
         context = self._battle_context(info)
         self._context = context
         strongest = next((i for i, label in enumerate(labels) if "THE STRONGEST CHOICE" in label), None)
-        if strongest is not None and not self._catch_nudge(info):       # the math is done, so no need to stop and think
-            self._activity = labels[strongest][:120]
+        if strongest is None:                   # no attack left to use, so don't sit there using moves that do nothing
+            strongest = next((i for i, label in enumerate(labels) if label == "Try to run away"), None)
+        if strongest is not None and (not self._catch_nudge(info) or labels[strongest] == "Try to run away"):
+            self._activity = labels[strongest][:120]                    # the math is done, so no need to stop and think
             print(f"[battle] {labels[strongest]}")
             self.history.append(f"In battle: {labels[strongest]}")
             return strongest
         self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
         shown = self._usable_battle_labels(labels)
+        if info.enemy and info.enemy.status:    # it already has a status problem, so more of those would be wasted
+            shown = [i for i in shown if "does no direct damage" not in labels[i]] or shown
         d = self.brain.decide(context, [labels[i] for i in shown])
         chosen = shown[d.choice]
         self._apply_decision(d, labels[chosen])
@@ -751,6 +759,13 @@ class Agent:
         self.memory.save()
 
     @staticmethod
+    def _lead_out_of_attacks(s: GameState) -> bool:
+        """The Pokémon she'd send in first can't deal any damage: only a Center (or item) fixes that."""
+        lead = next((m for m in s.party if m.hp > 0), None)
+        moves = getattr(lead, "moves", None)
+        return bool(moves) and not any(mv.power and mv.pp > 0 for mv in moves)
+
+    @staticmethod
     def _team_badly_hurt(s: GameState) -> bool:
         return bool(s.party) and sum(m.hp for m in s.party) * 3 < sum(m.max_hp for m in s.party)
 
@@ -793,14 +808,16 @@ class Agent:
         want_balls = delivered and not s.balls and s.money >= 400 and self._mart_turns < 30
         if want_balls and s.map_name.endswith(" - Mart"):
             self._mart_turns += 1               # a limit, so she can't get stuck in a shop she can't work out
-        hurt = self._team_badly_hurt(s)
+        out_of_attacks = self._lead_out_of_attacks(s)
+        hurt = self._team_badly_hurt(s) or out_of_attacks
         if not hurt:
             self._center_turns = 0
         needs_healing = hurt and self._center_turns < 30
         if needs_healing and s.map_name.endswith("Pokémon Center - 1F"):
             self._center_turns += 1             # a limit, so she can't get stuck at the counter
         return hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered,
-                        want_balls=want_balls, place=s.map_name, needs_healing=needs_healing)
+                        want_balls=want_balls, place=s.map_name, needs_healing=needs_healing,
+                        heal_anywhere=out_of_attacks and needs_healing)
 
     def _follow_route(self, options: list, s: GameState) -> list:
         """Where a route is known, the exit or door for her next step is the one she takes. [] if there isn't one."""

@@ -48,6 +48,10 @@ GUIDE_HEADINGS = ("Pallet Town to Pewter City", "Mt. Moon to Vermilion City", "L
                   "Saffron City to Viridian City", "Indigo Plateau")
 GUIDE_FOR_BADGES = (0, 1, 1, 2, 2, 3, 3, 3, 4)      # which part of the owner's route notes applies at each badge count
 GUIDE_MAX_CHARS = 900                               # keeps her prompt short, which keeps her fast
+BACK_TO_CENTER = "Your lead Pokémon has no attacks left. Go back to the nearest town and heal at the Pokémon Center, which refills them."
+TO_NEAREST_CENTER = {"Route 1": "north", "Route 2": "north", "Route 3": "west", "Route 22": "east", "Pallet Town": "north",
+                     "Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
+                     "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"}
 HM_NOTE = ("About HMs: an HM is a disc from your bag that teaches a move to a team member. A team member has to know the "
            "move, and you need the right badge, before you can use it outside battle. Once learned, an HM move can't be "
            "forgotten like normal moves. Cut clears small thin trees, Rock Smash breaks cracked rocks, Strength pushes big "
@@ -92,6 +96,8 @@ DESTINATIONS = {GET_PARCEL: "Viridian City - Mart", PARCEL: "Pallet Town - Profe
 
 def target_for(step: str, place: str) -> str:
     """The exit direction or door name she should take now, or "" to leave it up to her."""
+    if step == BACK_TO_CENTER:
+        return TO_NEAREST_CENTER.get(place, "")
     if step == HEAL:
         if arrived(step, place):
             return ""
@@ -133,12 +139,14 @@ def guide_section(badges: int, path: Path = GUIDE_PATH) -> str:
 
 
 def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str], delivered: bool,
-             want_balls: bool = False, place: str = "", needs_healing: bool = False) -> str:
+             want_balls: bool = False, place: str = "", needs_healing: bool = False, heal_anywhere: bool = False) -> str:
     def been(name: str) -> bool:
         return any(name in visited for visited in places)
 
     if not has_team:
         return NO_TEAM
+    if heal_anywhere and place.split(" - ")[0] not in CENTER_CITIES:
+        return BACK_TO_CENTER
     if needs_healing and place.split(" - ")[0] in CENTER_CITIES:    # only while she's in a town that has a Center
         return HEAL
     if any("PARCEL" in item.upper() for item in key_items):

@@ -919,6 +919,57 @@ def test_hm_moves_are_never_picked_to_forget():
     assert forget_choice(game, [vine, tackle, NS(name="X", power=60), NS(name="Y", power=70)], "CUT") == 1   # HMs get taught
 
 
+def _battle_info(status="", is_trainer=False):
+    from types import SimpleNamespace as NS
+
+    return NS(player=NS(species_name="X", moves=[], summary=lambda: "X"), is_trainer=is_trainer, message="",
+              enemy=NS(species=13, species_name="Y", level=3, hp=9, max_hp=12, status=status))
+
+
+def test_with_no_attacks_left_she_runs_from_wild_fights(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.brain.decide = lambda context, lines: 1 / 0                   # must not need the model
+    agent.game.state = lambda: NS(items=[], balls=[], party=[NS(species=1)])
+    labels = ["Use SLEEP POWDER (Grass type, 4 PP left, does no direct damage)", "Try to run away"]
+    assert agent._choose_battle_action(_battle_info("asleep"), labels, []) == 1
+
+
+def test_status_moves_are_hidden_when_the_foe_already_has_one(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay.brain import Decision
+
+    agent, _ = _named_agent(tmp_path)
+    seen = []
+    agent.brain.decide = lambda context, lines: seen.append(lines) or Decision("t", "", 0)
+    agent.game.state = lambda: NS(items=[("Potion", 1)], balls=[], party=[NS(species=1)])
+    labels = ["Use SLEEP POWDER (does no direct damage)", "Open your Bag (items, Poké Balls)", "Switch to a different Pokémon"]
+    assert agent._choose_battle_action(_battle_info("asleep", is_trainer=True), labels, []) == 1
+    assert seen == [labels[1:]]
+
+
+def test_out_of_attacks_sends_her_back_to_heal(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay import hints as h
+    from pokeplay.agent import Agent
+
+    mon = NS(hp=25, max_hp=42, moves=[NS(power=0, pp=4), NS(power=35, pp=0)])
+    assert Agent._lead_out_of_attacks(NS(party=[mon]))
+    assert not Agent._lead_out_of_attacks(NS(party=[NS(hp=9, moves=[NS(power=15, pp=2)])]))
+    assert h.hint_for(1, True, [], [], True, place="Route 3", needs_healing=True, heal_anywhere=True) == h.BACK_TO_CENTER
+    assert h.target_for(h.BACK_TO_CENTER, "Route 3") == "west"
+
+
+def test_a_chat_reply_is_never_dropped_as_a_repeat(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    said = []
+    agent.narrator.say = said.append
+    assert agent._speak("That fence looks freshly painted, Sam.")
+    assert agent._speak("That fence looks freshly painted, Sam.", always_fresh=True)
+    assert len(said) == 2
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

@@ -32,9 +32,15 @@ class ChatListener:
 
     def handle_line(self, line: str) -> None:
         match = LINE.match(line.strip())
-        if match and worth_reading(match.group(1), match.group(2).strip()):
+        if not match:
+            return
+        user, text = match.group(1), match.group(2).strip()
+        print(f"[chat] received from {user}: {text}")
+        if worth_reading(user, text):
             with self._lock:
-                self._inbox.append((match.group(1), match.group(2).strip()))
+                self._inbox.append((user, text))
+        else:
+            print("[chat] (filtered out)")
 
     def take(self) -> tuple[str, str] | None:
         """The newest message she hasn't answered, or None."""
