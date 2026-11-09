@@ -703,6 +703,23 @@ def test_her_guide_stays_secret(tmp_path):
     assert not agent._worth_noting("The rubber duck told me things.")
 
 
+def test_battle_math_labels_each_move():
+    from types import SimpleNamespace as NS
+    from pokeplay.battle import rate_moves
+
+    GRASS, FIRE, NORMAL = 12, 10, 0
+    game = NS(effectiveness=lambda move_type, defender: {GRASS: 0.5, NORMAL: 1.0}[move_type])
+    moves = [NS(pp=25, power=45, type=GRASS, accuracy=100), NS(pp=35, power=40, type=NORMAL, accuracy=100),
+             NS(pp=40, power=0, type=NORMAL, accuracy=100), NS(pp=0, power=200, type=NORMAL, accuracy=100)]
+    info = NS(player=NS(moves=moves, types=(GRASS, GRASS)), enemy=NS(types=(FIRE, FIRE)))
+    notes = rate_moves(game, info)
+    assert "not very effective" in notes[0] and "STRONGEST" not in notes[0]      # 45 x 0.5 x 1.5 = 33.75
+    assert "normal damage" in notes[1] and "STRONGEST" in notes[1]               # 40
+    assert "no direct damage" in notes[2]
+    assert 3 not in notes                                                        # out of PP
+    assert rate_moves(game, NS(player=None, enemy=None)) == {}
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

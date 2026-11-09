@@ -74,9 +74,10 @@ class BattlePilot:
 
     def _choices(self, info: BattleInfo, allow_run: bool) -> tuple[list[str], list[Choice]]:
         labels, choices = [], []
+        notes = rate_moves(self.game, info)
         for i, m in enumerate(info.player.moves if info.player else []):
             if m.pp > 0:
-                labels.append(f"Use {m.name} ({m.type_name} type, {m.pp} PP left)")
+                labels.append(f"Use {m.name} ({m.type_name} type, {m.pp} PP left{notes.get(i, '')})")
                 choices.append(Choice("move", i))
         if not choices and info.player:
             labels.append("Fight (no PP left on any move)")
@@ -180,6 +181,31 @@ class BattlePilot:
             self.emu.press("DOWN" if slot < self._party_target or slot > 5 else "UP", hold=2, wait=6)
         else:
             self.emu.press("A", hold=2, wait=12)    # select, then "SHIFT"
+
+
+def rate_moves(game: Game, info: BattleInfo) -> dict[int, str]:
+    """Do the battle math so she doesn't have to: {move slot: what to add to its label}."""
+    me, foe = info.player, info.enemy
+    if not me or not foe:
+        return {}
+    notes, scores = {}, {}
+    for slot, move in enumerate(me.moves):
+        if move.pp <= 0:
+            continue
+        if not move.power:
+            notes[slot] = ", does no direct damage"
+            continue
+        multiplier = game.effectiveness(move.type, foe.types)
+        same_type_bonus = 1.5 if move.type in me.types else 1.0
+        scores[slot] = move.power * multiplier * same_type_bonus * (move.accuracy or 100) / 100
+        effect = ("no effect at all on this opponent" if multiplier == 0 else
+                  "super effective" if multiplier > 1 else
+                  "not very effective" if multiplier < 1 else "normal damage")
+        notes[slot] = f", {effect}"
+    if scores and max(scores.values()) > 0:
+        best = max(scores, key=scores.get)
+        notes[best] += ", THE STRONGEST CHOICE"
+    return notes
 
 
 def hp_bar(mon: Mon) -> str:

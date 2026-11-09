@@ -53,13 +53,13 @@ def test_she_chooses_the_move():
     g.emu.press = lambda k, hold=6, wait=6: presses.append(k)
     set_input(g, A.HandleInputChooseAction)
     pilot.step()
-    # She sees names, types and PP, but no power or effectiveness hints.
-    assert seen["labels"][0] == "Use MOVE33 (Normal type, 35 PP left)"
-    assert seen["labels"][1] == "Use MOVE55 (Water type, 25 PP left)"
+    # She sees names, types and PP, plus the battle math the owner asked for.
+    assert seen["labels"][0].startswith("Use MOVE33 (Normal type, 35 PP left, ")
+    assert seen["labels"][1].startswith("Use MOVE55 (Water type, 25 PP left, ")
     assert seen["labels"][2].startswith("Open your Bag")
     assert seen["labels"][3] == "Switch to a different Pokémon"
     assert seen["labels"][4] == "Try to run away"
-    assert not any("effective" in l for l in seen["labels"])
+    assert any("STRONGEST" in l for l in seen["labels"])
     assert presses[-1] == "A"
     set_input(g, A.HandleInputChooseMove)
     g.emu.write(A.gMoveSelectionCursor, bytes([0]))
