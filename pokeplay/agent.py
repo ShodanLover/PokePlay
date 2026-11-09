@@ -10,6 +10,7 @@ import random
 import re
 import threading
 import time
+from pathlib import Path
 
 from . import addresses as A
 from .battle import BattlePilot, Choice, hp_bar
@@ -20,6 +21,7 @@ from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
 from .menus import Menu, MenuReader, forget_choice, new_move_power
 from .naming import MAX_CHARS, NamingScreen, clean_name
+from .highlights import Highlights
 from .hints import arrived, guide_section, hint_for, target_for
 from .narrator import Narrator
 from .news import Headlines
@@ -91,6 +93,8 @@ class Agent:
         self._failed_options: set[str] = set()      # map actions that just didn't work
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
+        self.highlights = Highlights(Path(cfg.brain.memory_file).resolve().parent / "logs")
+        self._last_badges: int | None = None
         self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
         self._center_turns = 0                      # decisions spent at a Pokémon Center trying to heal
         self._came_from = ""                        # the place she was in before this one
@@ -338,6 +342,7 @@ class Agent:
 
     def _event(self, text: str) -> None:
         print(f"[event] {text}")
+        self.highlights.event(text)
         self.overlay.log(text)
         self.history.append(text)
         if self.cfg.commentary.enabled:
@@ -396,6 +401,7 @@ class Agent:
             return False
         self.brain.remember_said(text)
         self._last_said = time.time()
+        self.highlights.spoken(text, self.cfg.brain.obsession, was_news=self.brain.took_headline())
         self.narrator.say(text)
         return True
 
@@ -837,6 +843,9 @@ class Agent:
         self._leaving_menus = False
         s = self.game.state()
         self._changes = self._note_changes(s)
+        if self._last_badges is not None and s.badges > self._last_badges:
+            self.highlights.badge(s.badges)
+        self._last_badges = s.badges
         self.world.mark_visited(s)
         map_key = f"{s.map_group}.{s.map_num}"
         if self.memory.visit(map_key, s.map_name):

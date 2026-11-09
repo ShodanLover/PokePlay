@@ -216,6 +216,7 @@ class Brain:
         self.catchphrase = ""
         self.obsession = ""             # an occasional running bit (config: obsession)
         self.headlines = None           # function returning a real headline to remark on, or ""
+        self._used_headline = False
         self._angles: list[str] = []    # comedic styles left before the list reshuffles
         self._subjects: list[str] = []  # random things to riff on, likewise
         self.recent_said: collections.deque[str] = collections.deque(maxlen=30)
@@ -471,6 +472,11 @@ class Brain:
             self._angles = random.sample(COMEDY_ANGLES, len(COMEDY_ANGLES))
         return self._angles.pop()
 
+    def took_headline(self) -> bool:
+        """True once after a comment was built around a real headline."""
+        used, self._used_headline = self._used_headline, False
+        return used
+
     def _headline_line(self) -> str:
         """Now and then, a real headline to remark on (her model doesn't know the news and would invent it)."""
         if not self.headlines or random.random() > NEWS_CHANCE:
@@ -478,6 +484,7 @@ class Brain:
         headline = self.headlines().replace('"', "'")
         if not headline:
             return ""
+        self._used_headline = True
         return (f'You happened to see this headline today: "{headline}". Treat it only as a piece of news, and '
                 "make a quick, light remark about it, using only what it says. Don't insult anyone or tell people "
                 "who to vote for. ")

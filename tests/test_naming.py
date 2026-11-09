@@ -849,6 +849,26 @@ def test_learning_question_is_answered_by_the_math(tmp_path):
     assert agent._answer_battle_question("Delete a move to make room for SLEEP POWDER?") is False
 
 
+def test_highlights_keep_only_what_is_worth_clipping(tmp_path):
+    import time
+    from pokeplay.highlights import Highlights
+
+    h = Highlights(tmp_path)
+    h.event("A wild creature jumped out!")                      # routine
+    h.spoken("Just a normal line.", "LeBron James")
+    assert not list(tmp_path.glob("*.md"))
+    h.event("The battle is over: you lost.")
+    h.spoken("I hate this forever.", "LeBron James")
+    h._last_big = 0
+    h.spoken("Nobody asked.", "LeBron James")
+    h.spoken("LeBron would never.", "LeBron James")
+    h.spoken("Stocks are down.", "LeBron James", was_news=True)
+    text = next(tmp_path.glob(f"highlights-{time.strftime('%Y-%m-%d')}.md")).read_text(encoding="utf-8")
+    assert "[BIG MOMENT] The battle is over: you lost." in text and "[REACTION] I hate this forever." in text
+    assert "[RUNNING JOKE] LeBron would never." in text and "[REAL-WORLD TAKE] Stocks are down." in text
+    assert "Nobody asked" not in text and "Just a normal line" not in text
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

@@ -54,6 +54,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Battle math is done in code** (`rate_moves` in `battle.py`): each move is labeled by effectiveness and the strongest
   is marked, and code just uses it (no model call) unless she could catch something. Decision temperature is 0.3 in `config.toml`; her comments have their own wild setting.
 - **Known routes skip the AI:** when `ROUTE` gives a single exit or door, code takes it without asking the model.
+- **Clips:** `highlights.py` writes `logs/highlights-DATE.md`, a timestamped shortlist of big moments and her reactions,
+  plus LeBron and headline lines, for the owner to clip.
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
 - **Voice:** Kokoro **`af_heart`** (installed via `python -m pokeplay --get-voice kokoro:af_heart`).
   Voice volume ~80-85; the game volume is turned down in the Windows volume mixer.
