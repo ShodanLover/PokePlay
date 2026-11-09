@@ -7,6 +7,7 @@ import difflib
 import json
 import queue
 import random
+import re
 import threading
 import time
 
@@ -17,7 +18,7 @@ from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
-from .menus import Menu, MenuReader
+from .menus import Menu, MenuReader, forget_choice, new_move_power
 from .naming import MAX_CHARS, NamingScreen, clean_name
 from .hints import arrived, guide_section, hint_for, target_for
 from .narrator import Narrator
@@ -479,6 +480,9 @@ class Agent:
         return d.choice
 
     def _answer_battle_question(self, question: str) -> bool:
+        learning = re.search(r"room for (.+?)\?", question)
+        if learning:                                    # worth making room for it only if it actually hits something
+            return new_move_power(self.game, learning.group(1).strip()) != 0
         context = self._memory_text(short=True) + f"\n\nIN BATTLE, the game asks: \"{question}\""
         self._wait_for_voice()
         d = self.brain.decide(context, ["YES", "NO"])
@@ -488,6 +492,11 @@ class Agent:
     # ------------------------------------------------------------------ menus (hers)
     def _menu_turn(self, menu: Menu) -> None:
         self._in_menus = True
+        if menu.kind == "forget_move":                  # plain arithmetic, so she doesn't get a say in it
+            slot = forget_choice(self.game, menu.data["moves"], menu.data["new_move"])
+            print(f"[moves] {menu.all_options()[slot]}")
+            self.menus.choose(menu, slot)
+            return
         browsing = menu.kind not in GAME_QUESTIONS and not self._in_battle
         if browsing and self._leaving_menus:
             self.emu.press("B", hold=2, wait=20)

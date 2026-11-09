@@ -822,6 +822,33 @@ def test_guide_section_follows_her_progress(tmp_path):
     assert guide_section(0, tmp_path / "missing.md") == ""
 
 
+def _move_game():
+    from types import SimpleNamespace as NS
+
+    table = {0: ("-", 0), 1: ("RAZOR LEAF", 55), 2: ("SLEEP POWDER", 0), 3: ("POUND", 40)}
+    return NS(move_data=[(table[i][1], 0, 100, 10) for i in table], move_name=lambda i: table[i][0])
+
+
+def test_new_moves_replace_the_right_one():
+    from types import SimpleNamespace as NS
+    from pokeplay.menus import forget_choice
+
+    game = _move_game()
+    tackle, vine, growl, poison = NS(power=35), NS(power=45), NS(power=0), NS(power=15)
+    assert forget_choice(game, [tackle, vine, growl, poison], "RAZOR LEAF") == 2     # no-damage move goes first
+    assert forget_choice(game, [tackle, vine, poison, NS(power=50)], "RAZOR LEAF") == 2   # otherwise the weakest
+    assert forget_choice(game, [tackle, vine, growl, poison], "SLEEP POWDER") == 4   # not worth an attack
+    assert forget_choice(game, [NS(power=60), NS(power=70), NS(power=80), NS(power=90)], "POUND") == 4   # worse than all
+    assert forget_choice(game, [tackle, vine, poison, NS(power=50)], "") == 2        # unknown: still drop the weakest
+
+
+def test_learning_question_is_answered_by_the_math(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.game.move_data, agent.game.move_name = _move_game().move_data, _move_game().move_name
+    assert agent._answer_battle_question("Delete a move to make room for RAZOR LEAF?") is True
+    assert agent._answer_battle_question("Delete a move to make room for SLEEP POWDER?") is False
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

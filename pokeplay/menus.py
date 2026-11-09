@@ -21,6 +21,26 @@ BAG_POCKETS = ["ITEMS", "KEY ITEMS", "POKé BALLS"]
 BACK = "Back out / close this (B button)"
 
 
+def new_move_power(game: Game, name: str) -> int | None:
+    """How hard a move hits (0 = no direct damage), looked up by name. None if it can't be found."""
+    for move_id in range(len(game.move_data)):
+        if game.move_name(move_id).upper() == name.upper():
+            return game.move_data[move_id][0]
+    return None
+
+
+def forget_choice(game: Game, moves: list, new_move: str) -> int:
+    """Which move slot to give up for a new move. len(moves) means keep them all and skip the new one."""
+    power = new_move_power(game, new_move) if new_move else None
+    if power == 0:
+        return len(moves)                       # a non-damaging move isn't worth losing an attack for
+    for slot, move in enumerate(moves):
+        if not move.power:
+            return slot
+    weakest = min(range(len(moves)), key=lambda slot: moves[slot].power)
+    return weakest if power is None or power > moves[weakest].power else len(moves)
+
+
 @dataclass
 class Menu:
     kind: str                       # yesno | multichoice | start | bag_context | tm_context | party_action |
@@ -157,7 +177,8 @@ class MenuReader:
         labels.append(f"Don't learn {new_move or 'the new move'} (keep all current moves)")
         title = f"{mon.nickname if mon else 'Your Pokémon'} wants to learn {new_move or 'a new move'} " \
                 "but already knows 4 moves. Pick one to forget."
-        return Menu("forget_move", title, labels, self.emu.u8(A.sMoveSelectionCursorPos), cancel_with_b=False)
+        return Menu("forget_move", title, labels, self.emu.u8(A.sMoveSelectionCursorPos), cancel_with_b=False,
+                    data={"moves": mon.moves if mon else [], "new_move": new_move})
 
     def _list_menu(self, tasks, funcs) -> Menu | None:
         list_ids = [i for i, func, _ in tasks if func == A.ListMenuDummyTask]
