@@ -12,6 +12,8 @@ HTML_PATH = Path(__file__).with_name("overlay.html")
 SUBTITLES_PATH = Path(__file__).with_name("subtitles.html")
 AVATAR_PATH = Path(__file__).with_name("avatar.html")
 AVATAR_JS_PATH = Path(__file__).with_name("avatar.js")
+AVATAR_3D_PATH = Path(__file__).with_name("avatar3d.js")
+THREE_PATH = Path(__file__).with_name("three.min.js")
 
 
 class OverlayState:
@@ -19,7 +21,7 @@ class OverlayState:
         self._lock = threading.Lock()
         self._data: dict = {"say": "", "thought": "", "goal": "", "mood": "", "stats": {}, "location": "", "badges": 0,
                             "money": 0, "party": [], "log": [], "mode": "", "action": "",
-                            "subtitle": "", "streamer": "", "feed": []}
+                            "subtitle": "", "streamer": "", "feed": [], "catch_up": None, "boss": None}
 
     def update(self, **kwargs) -> None:
         with self._lock:
@@ -45,6 +47,10 @@ def start_overlay(state: OverlayState, port: int = 8765) -> ThreadingHTTPServer:
         def do_GET(self):  # noqa: N802
             if self.path.startswith("/state.json"):
                 body, ctype = state.snapshot(), "application/json"
+            elif self.path.startswith("/avatar3d.js"):
+                body, ctype = AVATAR_3D_PATH.read_bytes(), "application/javascript; charset=utf-8"
+            elif self.path.startswith("/three.min.js"):
+                body, ctype = THREE_PATH.read_bytes(), "application/javascript; charset=utf-8"
             elif self.path.startswith("/avatar.js"):
                 body, ctype = AVATAR_JS_PATH.read_bytes(), "application/javascript; charset=utf-8"
             elif self.path.startswith("/avatar"):

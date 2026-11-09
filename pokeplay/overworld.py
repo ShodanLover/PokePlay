@@ -48,6 +48,11 @@ def region(x: int, y: int, w: int, h: int) -> str:
     return (ns + ew) or "middle"
 
 
+def same_door(w, listed) -> bool:
+    """This tile is just the other half of a wide door already listed for the same destination."""
+    return w.dest_group != 0x7F and any(abs(w.x - x) + abs(w.y - y) <= 2 for x, y in listed)
+
+
 @dataclass
 class Option:
     kind: str                 # warp | exit | talk | explore | train | menu | water | push
@@ -110,17 +115,18 @@ class Overworld:
         options: list[Option] = []
 
         # Doors, stairs and other warps.
-        seen_dest = set()
+        seen_dest: dict[tuple[int, int], list[tuple[int, int]]] = {}
         # A doorway can have decoy warp tiles beside the real one (behavior 0 never fires), so real ones go first.
         for w in sorted(warps, key=lambda w: not grid.in_bounds(w.x, w.y) or grid.behavior[w.y][w.x] == 0):
             path = find_path(grid, (s.x, s.y), {(w.x, w.y)}, avoid - {(w.x, w.y)}, s.surfing)
             if path is None:
                 continue
             dest = (w.dest_group, w.dest_num)
-            # Many maps have 2-tile-wide doors to the same place; list each once.
-            if dest in seen_dest and w.dest_group != 0x7F:
+            # Many maps have 2-tile-wide doors to the same place: list each door once. Caves have separate ladders to the
+            # same floor that lead to different parts of it, so anything further away is a different way through.
+            if same_door(w, seen_dest.get(dest, ())):
                 continue
-            seen_dest.add(dest)
+            seen_dest.setdefault(dest, []).append((w.x, w.y))
             key = f"{s.map_group}.{s.map_num}|door@{w.x},{w.y}"
             known = self.memory.links.get(key) if self.memory else None
             dest_name = map_name(w.dest_group, w.dest_num)

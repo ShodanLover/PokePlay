@@ -1045,6 +1045,157 @@ def test_training_picks_the_grass_and_has_a_limit(tmp_path):
     assert agent._train_turns == 0
 
 
+def test_only_gym_leaders_and_league_rooms_are_bosses():
+    from pokeplay.showcase import boss_for
+
+    assert boss_for("Pewter City - Gym", True, 14) == "Brock"
+    assert boss_for("Pewter City - Gym", True, 11) == ""                        # an ordinary trainer in the Gym
+    assert boss_for("Pewter City - Gym", False, 14) == ""
+    assert boss_for("Route 3", True, 14) == ""
+    assert boss_for("Pokémon League - Brunos Room", True, 51) == "Bruno"
+    assert boss_for("Pewter City - Gym", True, 0) == ""                         # couldn't read the team
+
+
+def test_catch_up_says_what_viewers_need():
+    from pokeplay.showcase import begin_fight, catch_up, end_fight, headline
+
+    bosses = {}
+    assert headline(bosses, 0) == "Hasn't reached a Gym Leader yet."
+    assert headline(bosses, 2) == "2 team wipes, no Gym Leader yet."
+
+    assert begin_fight(bosses, "Brock") == 1
+    end_fight(bosses, "Brock", "lost")
+    assert headline(bosses, 1) == "Lost to Brock 1 time so far."
+    assert begin_fight(bosses, "Brock") == 2
+    end_fight(bosses, "Brock", "won")
+    assert headline(bosses, 1) == "Beat Brock on attempt 2."
+
+    begin_fight(bosses, "Misty")
+    end_fight(bosses, "Misty", "won")
+    assert headline(bosses, 1) == "Beat Misty first try."
+    begin_fight(bosses, "Lt. Surge")
+    end_fight(bosses, "Lt. Surge", "lost")
+    assert headline(bosses, 2) == "Lost to Lt. Surge 1 time so far."            # an unbeaten boss is the story now
+
+    panel = catch_up(3, bosses, 2, 2, 8100)
+    assert panel["tag"] == "Day 3 so far"
+    assert panel["numbers"] == "2h 15m since last badge · 2 wipes"
+    assert catch_up(1, {}, 1, 0, 300)["numbers"] == "5m with no badge · 1 wipe"
+
+
+def test_banner_follows_a_boss_fight(tmp_path):
+    from types import SimpleNamespace as NS
+    import json
+
+    agent, _ = _named_agent(tmp_path)
+    agent.brain.name = "Zorblax"
+    agent.memory.places["7.1"] = "Pewter City - Gym"
+    agent._last_map = "7.1"
+    agent.emu = NS(read=lambda address, size: bytes(size))
+    agent.game = NS(decode_mon=lambda raw: NS(level=14))
+
+    def banner():
+        return json.loads(agent.overlay.snapshot())["boss"]
+
+    assert "attempt number 1" in agent._begin_boss_fight(True)
+    assert banner()["title"] == "Zorblax vs. Brock" and banner()["detail"] == "First attempt"
+    agent._end_boss_fight("lost")
+    assert banner()["state"] == "lost" and agent._boss == "" and agent._boss_clear_at
+    assert agent.memory.bosses["Brock"] == {"attempts": 1, "lost": 1, "beaten": False}
+
+    agent._begin_boss_fight(True)
+    assert banner()["detail"] == "Attempt 2" and agent._boss_clear_at == 0.0    # a new fight replaces the old result
+    agent._end_boss_fight("won")
+    assert banner()["title"] == "Zorblax beat Brock" and banner()["detail"] == "On attempt 2 · Badge earned"
+
+    agent._begin_boss_fight(False)                                              # a wild battle: nothing happens
+    assert agent._boss == "" and agent.memory.bosses["Brock"]["attempts"] == 2
+
+    agent.memory.save()
+    from pokeplay.memory import Memory
+    assert Memory.load(agent.memory.path).bosses["Brock"]["beaten"] is True
+
+
+def test_recap_only_when_coming_back_and_not_after_every_crash(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.game = NS(state=lambda: NS(party=[object()], badges=1, map_name="Route 3"))
+    said = []
+    agent._queue_comment = said.append
+
+    agent.memory.stats["sessions"] = 1                                          # a brand new game
+    agent._recap_the_story()
+    assert not said
+    agent.memory.stats["sessions"] = 2
+    agent._recap_the_story()
+    assert len(said) == 1 and "Route 3" in said[0] and "previously on" in said[0]
+    agent._recap_the_story()                                                    # restarted a minute later
+    assert len(said) == 1
+
+
+def test_she_always_finds_the_way_out_of_the_cave(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.places.update({"1.1": "Mt Moon - 1F", "1.2": "Mt Moon - B1F", "1.3": "Mt Moon - B2F"})
+    names = {"1.1": "Mt Moon - 1F", "1.2": "Mt Moon - B1F", "1.3": "Mt Moon - B2F"}
+    # Separate parts of each floor, joined only by ladders. The first ladder she'd try is a dead end.
+    parts = {"start": ("1.1", {"dead": "1.2", "down": "1.2"}), "deadend": ("1.2", {"dead_up": "1.1"}),
+             "mid": ("1.2", {"down_up": "1.1", "deeper": "1.3"}), "low": ("1.3", {"deeper_up": "1.2", "rise": "1.2"}),
+             "far": ("1.2", {"rise_down": "1.3", "out": "ROUTE"})}
+    ends = {"dead": ("deadend", "dead_up"), "dead_up": ("start", "dead"), "down": ("mid", "down_up"), "down_up": ("start", "down"),
+            "deeper": ("low", "deeper_up"), "deeper_up": ("mid", "deeper"), "rise": ("far", "rise_down"), "rise_down": ("low", "rise")}
+    where, standing = "start", ""
+
+    def options():
+        floor, ladders = parts[where]
+        return [NS(kind="warp", label="ladder", key=f"{floor}|{name}", distance=0 if name == standing else 5 + i,
+                   dest="Route 4" if goes == "ROUTE" else names[goes]) for i, (name, goes) in enumerate(ladders.items())]
+
+    party = [NS(hp=30, max_hp=30, level=15, moves=[NS(power=35, pp=20)], nickname="A")]
+    for _ in range(40):
+        group, num = parts[where][0].split(".")
+        state = NS(badges=1, party=party, key_items=[], balls=[("POKé BALL", 3)], money=500, map_group=int(group), map_num=int(num),
+                   map_name=names[parts[where][0]])
+        picked = agent._follow_route(options(), state)
+        assert len(picked) == 1
+        if picked[0].dest == "Route 4":
+            assert where == "far"
+            break
+        where, standing = ends[picked[0].key.split("|")[1]]
+    else:
+        raise AssertionError("never got out")
+
+
+def test_ladders_to_the_same_floor_are_all_offered():
+    from types import SimpleNamespace as NS
+    from pokeplay.overworld import same_door
+
+    listed = [(5, 5)]
+    assert same_door(NS(x=6, y=5, dest_group=1), listed)                        # the other half of a wide door
+    assert not same_door(NS(x=20, y=9, dest_group=1), listed)                   # a different ladder to the same floor
+    assert not same_door(NS(x=6, y=5, dest_group=0x7F), listed)                 # a special warp, always kept
+
+
+def test_one_tired_pokemon_does_not_mean_the_team_is_out():
+    from types import SimpleNamespace as NS
+    from pokeplay.agent import Agent
+
+    tired = NS(hp=20, moves=[NS(power=35, pp=0)])
+    fresh = NS(hp=20, moves=[NS(power=40, pp=30)])
+    assert not Agent._lead_out_of_attacks(NS(party=[tired, fresh]))
+    assert Agent._lead_out_of_attacks(NS(party=[tired, NS(hp=0, moves=[NS(power=40, pp=30)])]))
+
+
+def test_remembered_doors_lead_her_out_to_heal():
+    from pokeplay.hints import way_to_center
+
+    links = {"1.2|door@3,3": "Mt Moon - 1F", "1.1|door@9,9": "Route 4"}
+    places = {"1.1": "Mt Moon - 1F", "1.2": "Mt Moon - B1F", "3.22": "Route 4"}
+    assert way_to_center("Mt Moon - B1F", links, places) == "1.2|door@3,3"
+
+
 def test_out_of_attacks_sends_her_back_to_heal(tmp_path):
     from types import SimpleNamespace as NS
     from pokeplay import hints as h

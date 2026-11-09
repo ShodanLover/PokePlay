@@ -28,6 +28,8 @@ from .hints import (BACK_TO_CENTER, HM_NOTE, HM_TEACHING, TRAIN_LIMIT, arrived, 
                     target_for, way_to_center)
 from .narrator import Narrator
 from .news import Headlines
+from .showcase import (BOSS_RESULT_SECONDS, RECAP_EVERY, begin_fight, boss_for, catch_up, end_fight, fight_banner,
+                       recap_prompt, result_banner)
 from .overlay.server import OverlayState, start_overlay
 from .overworld import BLOCKED_EXIT, Overworld
 from .watchdog import PUSH_DECISIONS, SAMPLE_EVERY, WALK, StoryWatch, Watchdog, escape_keys, escape_kind, fingerprint
@@ -57,6 +59,7 @@ EVENT_MAX_AGE = 6        # seconds after which something that happened is too ol
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
+MT_MOON_FAR_SIDE = "Mt Moon - B1F"  # the only floor whose way out comes out past the mountain
 SPEAK_DECISION_CHANCE = 0.2 # the rest of her talking comes from comments, which vary far more
 LONG_SILENCE = 15        # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
@@ -123,6 +126,10 @@ class Agent:
         self._last_move: tuple[str, int, int] = ("", -1, 0)   # last battle choice, opponent's HP then, times in a row
         self._switch_tries = self._party_menu_tries = 0     # attempts at switching in the current battle
         self._battle_announced = False              # this battle has already been counted and announced
+        self._cave_going = ""                       # the ladder she's on her way to
+        self._door_in_progress: tuple[str, str] | None = None   # a door that was still fading when the walk ended
+        self._boss = ""                             # who she's fighting, if it's a boss
+        self._boss_clear_at = 0.0                   # when the win or loss comes off the banner
         self.watchdog = Watchdog()
         self.story = StoryWatch()
         self._training_now = False
@@ -176,6 +183,7 @@ class Agent:
         start_overlay(self.overlay, self.cfg.overlay.port)
         print(f"Overlay: http://127.0.0.1:{self.cfg.overlay.port}  Subtitles: http://127.0.0.1:{self.cfg.overlay.port}/subtitles")
         self.memory.bump("sessions")
+        self._recap_the_story()
         self.memory.save()
         self.overlay.update(goal=self._public_goal(), mood=self.memory.mood)
         self.news.start()
@@ -183,6 +191,17 @@ class Agent:
             self.chat.start()
         if self.cfg.commentary.enabled:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
+
+    def _recap_the_story(self) -> None:
+        """Coming back to a game already under way: she says where things stand."""
+        st, now = self.memory.stats, time.time()
+        if not self.cfg.commentary.enabled or st.get("sessions", 0) < 2 or now - st.get("last_recap", 0) < RECAP_EVERY:
+            return
+        s = self.game.state()
+        if s.party:
+            st["last_recap"] = now
+            self._queue_comment(recap_prompt(self.memory.days_since_start(), self.memory.bosses,
+                                             int(st.get("battles_lost", 0)), s.badges, s.map_name))
 
     def _resume_saved_game(self) -> None:
         """mGBA always opens at the title screen and she only saves to a state slot, so without this she'd start over."""
@@ -412,6 +431,12 @@ class Agent:
                 "fainted": int(st.get("pokemon_fainted", 0)),
                 "places": len(self.memory.places),
             })
+            self.overlay.update(catch_up=catch_up(self.memory.days_since_start(), self.memory.bosses,
+                                                  int(st.get("battles_lost", 0)), self._last_badges or 0,
+                                                  st.get("play_seconds", 0) - st.get("last_badge_at", 0)))
+            if self._boss_clear_at and now >= self._boss_clear_at:
+                self._boss_clear_at = 0.0
+                self.overlay.update(boss=None)
         minutes = self.cfg.emulator.autosave_minutes
         if minutes and mode == "overworld" and now - self._last_autosave > minutes * 60:
             self._last_autosave = now
@@ -435,7 +460,7 @@ class Agent:
             if foe and not self._battle_announced:      # screen changes mid-battle land here too: announce it once
                 self._battle_announced = True
                 who = "Someone challenged you to a battle" if info.is_trainer else "A wild creature jumped out"
-                self._event(f"{who}! It's called {foe.species_name}, level {foe.level}.")
+                self._event(f"{who}! It's called {foe.species_name}, level {foe.level}.{self._begin_boss_fight(info.is_trainer)}")
         elif self._in_battle and new not in ("battle", "party_menu"):
             self._in_battle = False
             outcome = BATTLE_OUTCOMES.get(self.emu.u8(A.gBattleOutcome), "")
@@ -458,10 +483,34 @@ class Agent:
                 self.history.append(f"Battle ended: {outcome}.")
                 lines.insert(0, f"The battle is over: you {outcome}." if outcome in ("won", "lost", "drew", "ran away")
                              else f"The battle is over: {outcome}.")
+            if self._boss:
+                lines.append(self._end_boss_fight(outcome))
             if lines:
                 self._event(" ".join(lines))
             self.memory.save()
             self._decisions_since_reflect = REFLECT_EVERY   # reflect after each battle
+
+    def _begin_boss_fight(self, is_trainer: bool) -> str:
+        """A Gym Leader or League fight gets the banner and a count. Returns what she should know about it, or ""."""
+        team = (self.game.decode_mon(self.emu.read(A.gEnemyParty + i * 100, 100)) for i in range(6))
+        top_level = max((m.level for m in team if m), default=0)
+        self._boss = boss_for(self.memory.places.get(self._last_map, ""), is_trainer, top_level)
+        if not self._boss:
+            return ""
+        attempt = begin_fight(self.memory.bosses, self._boss)
+        self._boss_clear_at = 0.0
+        self.overlay.update(boss=fight_banner(self.brain.name, self._boss, attempt))
+        return f" This is {self._boss}, and it's your attempt number {attempt}."
+
+    def _end_boss_fight(self, outcome: str) -> str:
+        """Put the result on the banner for a moment. Returns the line she reacts to."""
+        name, self._boss = self._boss, ""
+        attempt = self.memory.bosses[name]["attempts"]
+        end_fight(self.memory.bosses, name, outcome)
+        banner = result_banner(self.brain.name, name, attempt, outcome)
+        self.overlay.update(boss=banner)
+        self._boss_clear_at = time.time() + BOSS_RESULT_SECONDS if banner else 0.0
+        return f"That was your attempt number {attempt} against {name}."
 
     def _event(self, text: str) -> None:
         print(f"[event] {text}")
@@ -620,11 +669,11 @@ class Agent:
         context = self._battle_context(info)
         self._context = context
         strongest = next((i for i, label in enumerate(labels) if "THE STRONGEST CHOICE" in label), None)
-        if strongest is None:                   # no attack left to use, so don't sit there using moves that do nothing
-            strongest = next((i for i, label in enumerate(labels) if label == "Try to run away"), None)
         if strongest is None and self._switch_tries < MAX_SWITCH_TRIES and self._attacker_slot(skip_active=True) is not None:
             strongest = next((i for i, label in enumerate(labels) if label.startswith("Switch to")), None)
-            self._switch_tries += 1
+            self._switch_tries += 1             # someone else can still fight, and running every time teaches her nothing
+        if strongest is None:                   # no attack left to use, so don't sit there using moves that do nothing
+            strongest = next((i for i, label in enumerate(labels) if label == "Try to run away"), None)
         if strongest is None:                   # no attack, can't run, nobody to swap to: the code plays it out
             strongest = self._last_resort_move(labels)
         moves = [i for i, label in enumerate(labels) if label.startswith("Use ")]
@@ -1019,10 +1068,10 @@ class Agent:
 
     @staticmethod
     def _lead_out_of_attacks(s: GameState) -> bool:
-        """The Pokémon she'd send in first can't deal damage, or nearly can't: a trainer battle with none left can't be left."""
-        lead = next((m for m in s.party if m.hp > 0), None)
-        moves = getattr(lead, "moves", None)
-        return bool(moves) and sum(mv.pp for mv in moves if mv.power) <= LOW_ATTACK_PP
+        """Nobody on her team can deal damage, or nearly: a trainer battle with none left can't be left. One tired Pokémon isn't
+        enough, because battles swap in whoever can still fight."""
+        fighters = [getattr(m, "moves", None) for m in s.party if m.hp > 0]
+        return any(fighters) and all(not moves or sum(mv.pp for mv in moves if mv.power) <= LOW_ATTACK_PP for moves in fighters)
 
     @staticmethod
     def _team_badly_hurt(s: GameState) -> bool:
@@ -1095,6 +1144,8 @@ class Agent:
             grass = [o for o in options if o.kind == "train"]
             if grass:
                 return grass
+        if s.map_name.startswith("Mt Moon"):
+            return self._through_the_cave(options, s, step)
         if arrived(step, s.map_name):                   # in the right place: stay and talk to people, least-tried first
             people = [o for o in options if o.kind == "talk"]
             if not people:
@@ -1105,8 +1156,29 @@ class Agent:
             found = [o for o in options if want and ((o.kind == "exit" and o.label.startswith(f"Leave this area by the {want} side"))
                                                      or (o.kind == "warp" and want in o.dest))]
             if found:
-                return found
+                return [o for o in found if o.dest == want] or found    # "Route 4" over "Route 4 - Pokémon Center - 2F"
         return []
+
+    def _through_the_cave(self, options: list, s: GameState, step: str) -> list:
+        """Always take the ladder used least, counting both ends of each one. That's guaranteed to find the way out of any maze."""
+        used, warps = self.memory.cave_doors, [o for o in options if o.kind == "warp"]
+        here = f"{s.map_group}.{s.map_num}|"
+        if self._cave_going and not self._cave_going.startswith(here):      # she made it through that ladder
+            used[self._cave_going] = used.get(self._cave_going, 0) + 1
+            for o in warps:
+                if o.distance <= 1:                     # the far end of it, which she's standing on
+                    used[o.key] = used.get(o.key, 0) + 1
+            self._cave_going = ""
+        outside = [o for o in warps if o.dest == "Route 4"]
+        if outside and (s.map_name == MT_MOON_FAR_SIDE or step == BACK_TO_CENTER):
+            return outside[:1]
+        inside = [o for o in warps if o.dest.startswith("Mt Moon")]
+        if not inside:
+            return []
+        choice = next((o for o in inside if o.key == self._cave_going), None)     # finish the walk a battle interrupted
+        choice = choice or min(inside, key=lambda o: (used.get(o.key, 0), o.distance))
+        self._cave_going = choice.key
+        return [choice]
 
     def _check_story_progress(self, s: GameState) -> None:
         """Busy isn't the same as getting somewhere: if she's gone a long time without either, the code takes the walking."""
@@ -1185,7 +1257,15 @@ class Agent:
         self._changes = self._note_changes(s)
         if self._last_badges is not None and s.badges > self._last_badges:
             self.highlights.badge(s.badges)
+            self.memory.stats["last_badge_at"] = self.memory.stats.get("play_seconds", 0)
         self._last_badges = s.badges
+        if self._door_in_progress:
+            key, destination = self._door_in_progress
+            self._door_in_progress = None
+            if s.map_name == destination:
+                if key not in self.memory.links:
+                    self._discovered()
+                self.memory.links[key] = destination
         self.world.mark_visited(s)
         map_key = f"{s.map_group}.{s.map_num}"
         if self.memory.visit(map_key, s.map_name):
@@ -1262,6 +1342,8 @@ class Agent:
         if opt.kind == "exit" and result.outcome == "stuck":     # a proven fact, not a guess, so it's worth keeping
             self.memory.links[opt.key] = BLOCKED_EXIT
             self.memory.add_lesson(f"{s.map_name}: you can't leave by the {opt.label.split(' side')[0].split()[-1]} side.")
+        if opt.kind == "warp" and result.outcome == "interrupted" and result.detail == "other":
+            self._door_in_progress = (opt.key, opt.dest)     # the screen's still fading: check where she ends up next turn
         if opt.kind in ("warp", "exit") and result.outcome == "warped":
             if opt.key not in self.memory.links:
                 self._discovered()

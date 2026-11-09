@@ -72,6 +72,14 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Levels before gyms (owner's request):** `TRAINING` in `hints.py` holds the level her strongest should reach for the first
   5 gyms. If she's short while in that city or on the grass route next to it, she trains there, for at most `TRAIN_LIMIT` (60)
   decisions per gym so she can't stall. Sabrina onward (`LATE_TARGETS`) is only a warning in her next step.
+- **Caves:** every separate ladder is offered, even several to the same floor (`same_door` only merges wide doors). In Mt. Moon code
+  takes the least-used ladder, counting both ends (`_through_the_cave`, `cave_doors` in memory), which always finds the exit on B1F. She
+  only counts as out of attacks when nobody on the team has any, and in battle she swaps to whoever can fight before running.
+- **Show for viewers (`showcase.py`, owner's request):** the corner panel beside the subtitles says where things stand; the status
+  card flips to a banner for Gym Leader and League fights with the attempt number. She says a "previously on" when she comes back
+  on air, at most every 30 minutes. All of it comes from real events and never affects her decisions.
+- **Avatar (owner's request):** `avatar3d.js` is an original 3D character built in code on a local copy of three.js: pink twin tails,
+  headset with no microphone, reacts to talking, thinking, boss fights, wins and losses. If 3D fails, `avatar.js` (the pixel-art one) takes over.
 - **Clips:** `highlights.py` writes `logs/highlights-DATE.md`, a timestamped shortlist of big moments and her reactions,
   plus LeBron and headline lines, for the owner to clip.
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
@@ -95,7 +103,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 
 ## Current status
 
-- All code is written and pushed. **42 tests pass** (`python -m pytest`; needs `pip install pytest lupa`).
+- All code is written and pushed. **159 tests pass** (`python -m pytest`; needs `pip install pytest lupa`).
 - **Never verified against the real game yet.** All memory addresses come from the pret/pokefirered
   decompilation, and the logic is tested with simulated memory. The first real runs showed she walks,
   talks, names things and explores. The menus (Bag, TM Case, catching, shops, move forgetting) are
@@ -152,7 +160,8 @@ pokeplay/
   narrator.py             TTS on a background thread: windows | piper | kokoro | none
   voices.py               --list-voices / --get-voice / --test-voice helpers (Kokoro + Piper)
   overlay/                local web server (port 8765): overlay.html, subtitles.html, avatar.html
-                          + avatar.js (original pixel-art girl: pink hair, headset, blinks/talks/glitches)
+                          + avatar3d.js (3D avatar, three.min.js) and avatar.js (pixel-art fallback)
+  showcase.py             boss fights, attempt counts, the catch-up panel and the stream-start recap
   agent.py                main loop: mode detection -> menu turn / battle / dialog / overworld turn;
                           commentary thread incl. idle "thinking out loud" after max_silence_seconds
 ```

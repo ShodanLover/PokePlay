@@ -21,7 +21,24 @@
   .wrap { position: absolute; top: 12px; right: 12px; width: 444px; height: 714px; overflow: hidden;
     display: flex; flex-direction: column; gap: 12px; }
   .card { background: var(--bg); border: 1px solid var(--edge); border-radius: 14px; padding: 12px 18px; box-sizing: border-box; }
-  .status { flex: none; padding: 10px 18px; }
+  .status { flex: none; padding: 10px 18px; position: relative; }
+  /* During a boss fight this covers the status card, so nothing else on stream has to move. */
+  .boss { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; padding: 10px 18px; box-sizing: border-box; text-align: center; background: #0e121c; border-radius: 13px;
+    border: 3px solid var(--tone); --tone: var(--accent); }
+  .boss.on { display: flex; }
+  .boss.fight { animation: boss-pulse 1.4s ease-in-out infinite; }
+  .boss.won { --tone: var(--hp-good); }
+  .boss.lost { --tone: var(--hp-low); }
+  .boss-tag { font-size: 16px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--tone); }
+  .boss-title { font-size: 36px; font-weight: 700; line-height: 1.12; overflow-wrap: anywhere; }
+  .boss-detail { font-size: 20px; color: var(--muted); }
+  @keyframes boss-pulse { 0%, 100% { box-shadow: inset 0 0 0 0 transparent; } 50% { box-shadow: inset 0 0 26px 2px var(--tone); } }
+  /* The empty corner left of the subtitles, under the game: x 12-292, y 974-1072. */
+  .catchup { position: absolute; left: 12px; bottom: 8px; width: 280px; height: 98px; padding: 8px 14px; overflow: hidden; }
+  .catchup-tag { font-size: 13px; line-height: 16px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); }
+  .catchup-head { font-size: 18px; line-height: 22px; font-weight: 600; max-height: 44px; overflow: hidden; }
+  .catchup-nums { font-size: 14px; line-height: 18px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .status-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
   .status-top .tag { color: var(--accent); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
   .status-top .nums { color: var(--muted); white-space: nowrap; }
@@ -61,6 +78,11 @@
     <div class="where" id="where">&nbsp;</div>
     <div class="goal" id="goal">Getting started</div>
     <div id="feed"></div>
+    <div class="boss" id="boss">
+      <div class="boss-tag" id="boss-tag"></div>
+      <div class="boss-title" id="boss-title"></div>
+      <div class="boss-detail" id="boss-detail"></div>
+    </div>
   </div>
   <div class="card chat">
     <div class="label">Twitch chat</div>
@@ -70,6 +92,11 @@
     <div class="label">Team</div>
     <div id="team"></div>
   </div>
+</div>
+<div class="card catchup" id="catchup" hidden>
+  <div class="catchup-tag" id="catchup-tag"></div>
+  <div class="catchup-head" id="catchup-head"></div>
+  <div class="catchup-nums" id="catchup-nums"></div>
 </div>
 <script>
   // Twitch chat, read-only and anonymous. It only draws messages here: chat never reaches the AI.
@@ -158,7 +185,25 @@
     }));
   }
 
+  function renderShow(s) {
+    const box = document.getElementById("catchup"), up = s.catch_up;
+    box.hidden = !up;
+    if (up) {
+      document.getElementById("catchup-tag").textContent = up.tag;
+      document.getElementById("catchup-head").textContent = up.headline;
+      document.getElementById("catchup-nums").textContent = up.numbers;
+    }
+    const banner = document.getElementById("boss"), boss = s.boss;
+    banner.className = boss ? "boss on " + boss.state : "boss";
+    if (boss) {
+      document.getElementById("boss-tag").textContent = boss.tag;
+      document.getElementById("boss-title").textContent = boss.title;
+      document.getElementById("boss-detail").textContent = boss.detail;
+    }
+  }
+
   function renderStatus(s) {
+    renderShow(s);
     const stats = s.stats || {};
     document.getElementById("badges").textContent = (s.badges || 0) + "/8";
     document.getElementById("record").textContent = (stats.won || 0) + "–" + (stats.lost || 0);

@@ -4,14 +4,17 @@
 <meta charset="utf-8">
 <title>PokePlay Avatar</title>
 <style>
-  /* OBS Browser Source: http://127.0.0.1:8765/avatar  (1920 x 1080). She sits in the bottom-right corner. */
+  /* OBS Browser Source: http://127.0.0.1:8765/avatar  (1920 x 1080). She sits in the bottom-right corner:
+     clear of the team panel above (ends y 726) and the subtitles to the left (end x 1616). */
   :root { --tag-bg: rgba(14, 18, 28, 0.86); --tag-text: #ffffff; --accent: #ff46aa; }
   html, body { margin: 0; background: transparent; overflow: hidden; }
-  .avatar { position: absolute; right: 32px; bottom: 32px; display: flex; flex-direction: column; align-items: center; }
-  canvas { image-rendering: pixelated; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  .avatar { position: absolute; right: 14px; bottom: 14px; width: 280px; display: flex; flex-direction: column; align-items: center; }
+  canvas { display: block; filter: drop-shadow(0 6px 10px rgba(0,0,0,.5)); }
+  canvas.flat { image-rendering: pixelated; }
+  canvas.three { width: 280px; height: 280px; -webkit-mask-image: linear-gradient(#000 82%, transparent 100%); }
   .tag { margin-top: 6px; padding: 4px 14px; border-radius: 999px; background: var(--tag-bg);
     border: 2px solid var(--accent); color: var(--tag-text); font: 700 20px "Segoe UI", system-ui, sans-serif; }
-  .bubble { position: absolute; top: -14px; left: -46px; padding: 6px 12px; border-radius: 14px;
+  .bubble { position: absolute; top: 6px; left: 6px; padding: 6px 12px; border-radius: 14px;
     background: #fff; color: #222; font: 700 22px "Segoe UI", system-ui, sans-serif; opacity: 0; transition: opacity .2s; }
   .bubble span { display: inline-block; animation: hop 1s infinite; }
   .bubble span:nth-child(2) { animation-delay: .15s; } .bubble span:nth-child(3) { animation-delay: .3s; }
@@ -19,15 +22,26 @@
 </style>
 </head>
 <body>
-<div class="avatar">
+<div class="avatar" id="stage">
   <div class="bubble" id="bubble"><span>.</span><span>.</span><span>.</span></div>
-  <canvas id="avatar" width="256" height="256"></canvas>
+  <canvas id="avatar" class="three" width="560" height="560"></canvas>
   <div class="tag" id="tag"></div>
 </div>
 <script src="/avatar.js"></script>
+<script src="/three.min.js"></script>
+<script src="/avatar3d.js"></script>
 <script>
-  startAvatar(document.getElementById("avatar"), {
-    bubble: document.getElementById("bubble"), nameTag: document.getElementById("tag") });
+  const parts = { bubble: document.getElementById("bubble"), nameTag: document.getElementById("tag") };
+  try {
+    startAvatar3D(document.getElementById("avatar"), parts);
+  } catch (e) {                     // no 3D available in this browser: the original pixel-art version takes over
+    console.error("3D avatar unavailable:", e);
+    const flat = document.createElement("canvas");
+    flat.width = flat.height = 256;
+    flat.className = "flat";
+    document.getElementById("avatar").replaceWith(flat);
+    startAvatar(flat, parts);
+  }
 </script>
 </body>
 </html>

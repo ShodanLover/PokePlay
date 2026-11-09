@@ -43,7 +43,7 @@ BY_BADGES = [
 ]
 HEAL = "Your team is badly hurt. Go into this town's Pokémon Center and talk to the person at the counter to heal them for free."
 CENTER_CITIES = ("Viridian City", "Pewter City", "Cerulean City", "Lavender Town", "Vermilion City", "Celadon City",
-                 "Fuchsia City", "Cinnabar Island", "Saffron City")
+                 "Fuchsia City", "Cinnabar Island", "Saffron City", "Route 4")
 GUIDE_PATH = Path(__file__).resolve().parent.parent / "firered_walkthrough.md"
 GUIDE_HEADINGS = ("Pallet Town to Pewter City", "Mt. Moon to Vermilion City", "Lavender Town to Fuchsia City",
                   "Saffron City to Viridian City", "Indigo Plateau")
@@ -124,7 +124,11 @@ for _badges, (_leader, _city, _level, _way, _route, _back) in TRAINING.items():
 # out of every building on the way, like the ship or the Gym itself.
 # Route 2 is cut in two by the forest: from the south half the north exit can't be reached, so she takes the forest door.
 BACKUP_TARGET = {step: {"Route 2": "Viridian Forest - South Entrance"} for step in (THROUGH_FOREST, BROCK)}
+BACKUP_TARGET[THROUGH_MT_MOON] = {"Route 4": "Mt Moon"}     # still on the near side of the mountain
 AFTER_TRAINING = {BY_BADGES[badges]: {TRAINING[badges][4]: TRAINING[badges][5]} for badges in (2, 3, 4)}
+# Past the mountain, or back out of the Center beside it. Not in ROUTE, so inside the cave the ladders are left to the cave code.
+AFTER_TRAINING[THROUGH_MT_MOON] = {"Route 4": "east", "Route 4 - Pokémon Center - 1F": "Route 4",
+                                   "Route 4 - Pokémon Center - 2F": "Route 4"}
 
 
 # The buildings where a step's job gets done, by the game's full map names.

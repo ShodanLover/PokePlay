@@ -19,6 +19,8 @@ class Memory:
     places: dict[str, str] = field(default_factory=dict)    # "group.num" -> place name, once visited
     links: dict[str, str] = field(default_factory=dict)     # "group.num|door@x,y" -> where it leads
     people: dict[str, str] = field(default_factory=dict)    # "group.num|localId" -> what they said
+    bosses: dict[str, dict] = field(default_factory=dict)   # boss name -> attempts, losses, beaten (see showcase.py)
+    cave_doors: dict[str, int] = field(default_factory=dict)    # ladder -> times used, for getting through caves
     goal: str = ""                                          # her own current goal
     mood: str = ""
     stats: dict[str, float] = field(default_factory=lambda: {
