@@ -100,6 +100,7 @@ class Agent:
         self._last_chat_reply = 0.0
         self.highlights = Highlights(Path(cfg.brain.memory_file).resolve().parent / "logs")
         self._last_badges: int | None = None
+        self._last_move: tuple[str, int, int] = ("", -1, 0)   # last battle choice, opponent's HP then, times in a row
         self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
         self._center_turns = 0                      # decisions spent at a Pokémon Center trying to heal
         self._came_from = ""                        # the place she was in before this one
@@ -488,11 +489,23 @@ class Agent:
         shown = self._usable_battle_labels(labels)
         if info.enemy and info.enemy.status:    # it already has a status problem, so more of those would be wasted
             shown = [i for i in shown if "does no direct damage" not in labels[i]] or shown
+        shown = [i for i in shown if not self._move_not_working(labels[i], info)] or shown
         d = self.brain.decide(context, [labels[i] for i in shown])
         chosen = shown[d.choice]
+        self._remember_move(labels[chosen], info)
         self._apply_decision(d, labels[chosen])
         self.history.append(f"In battle: {labels[chosen]}")
         return chosen
+
+    def _move_not_working(self, label: str, info: BattleInfo) -> bool:
+        """She's used this twice in a row and the opponent's HP hasn't moved."""
+        name, hp, times = self._last_move
+        return times >= 2 and name == label.split(" (")[0] and info.enemy is not None and info.enemy.hp == hp
+
+    def _remember_move(self, label: str, info: BattleInfo) -> None:
+        name, hp = label.split(" (")[0], info.enemy.hp if info.enemy else -1
+        same = self._last_move[0] == name and self._last_move[1] == hp
+        self._last_move = (name, hp, self._last_move[2] + 1 if same else 1)
 
     def _usable_battle_labels(self, labels: list[str]) -> list[int]:
         """Positions of the battle choices worth offering: an empty bag has nothing to use."""

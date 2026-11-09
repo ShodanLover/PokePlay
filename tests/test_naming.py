@@ -970,6 +970,24 @@ def test_a_chat_reply_is_never_dropped_as_a_repeat(tmp_path):
     assert len(said) == 2
 
 
+def test_a_move_that_isnt_working_gets_dropped(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    info = _battle_info()
+    label = "Use GROWL (Normal type, 40 PP left, does no direct damage)"
+    agent._remember_move(label, info)
+    assert not agent._move_not_working(label, info)
+    agent._remember_move(label.replace("40 PP", "39 PP"), info)
+    assert agent._move_not_working(label, info)
+    info.enemy.hp -= 3                                      # it did something, so it's fine again
+    assert not agent._move_not_working(label, info)
+
+
+def test_toaster_talk_is_not_spoken(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.narrator.say = lambda text: None
+    assert agent._speak("My brain is a broken toaster.") is False
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

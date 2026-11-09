@@ -173,7 +173,7 @@ OBSESSION_GAP = 8           # lines that must pass before she brings it up again
 NEWS_CHANCE = 0.2           # how often a spoken comment remarks on a real headline (1 in 5)
 
 # Words she leaned on until they got old. Lines using them are thought, not said.
-OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b|\bglitch", re.I)
+OVERUSED_WORDS = re.compile(r"\bchao(?:s|tic)\b|\bglitch|\btoaster|\bwink", re.I)
 
 # Lines that are her repeating her instructions rather than talking to viewers. Never read these out.
 LEAKED_INSTRUCTIONS = re.compile(r"\bthe user\b|\bunder \d+ words\b|\bshort (spoken )?sentences\b|\bin first person\b", re.I)
