@@ -47,7 +47,7 @@ GUIDE_PATH = Path(__file__).resolve().parent.parent / "firered_walkthrough.md"
 GUIDE_HEADINGS = ("Pallet Town to Pewter City", "Mt. Moon to Vermilion City", "Lavender Town to Fuchsia City",
                   "Saffron City to Viridian City", "Indigo Plateau")
 GUIDE_FOR_BADGES = (0, 1, 1, 2, 2, 3, 3, 3, 4)      # which part of the owner's route notes applies at each badge count
-GUIDE_MAX_CHARS = 900                               # keeps her prompt short, which keeps her fast
+GUIDE_MAX_CHARS = 1500                              # keeps her prompt short, which keeps her fast
 BACK_TO_CENTER = "Your lead Pokémon has no attacks left. Go back to the nearest town and heal at the Pokémon Center, which refills them."
 TO_NEAREST_CENTER = {"Route 1": "north", "Route 2": "north", "Route 3": "west", "Route 22": "east", "Pallet Town": "north",
                      "Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
