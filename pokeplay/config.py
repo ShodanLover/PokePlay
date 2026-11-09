@@ -49,7 +49,8 @@ class VoiceConfig:
 @dataclass
 class OverlayConfig:
     port: int = 8765
-    twitch_channel: str = ""    # shows this channel's chat on the overlay (display only; never reaches the AI)
+    twitch_channel: str = ""    # shows this channel's chat on the overlay
+    chat_replies: bool = False  # she answers viewers out loud; chat still never affects her game decisions
 
 
 @dataclass

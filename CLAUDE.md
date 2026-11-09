@@ -15,7 +15,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Cost: $0.** Everything runs locally and free: Ollama local model, Kokoro voice, mGBA, OBS.
   No paid APIs.
 - **Fully autonomous.** It runs unattended while the owner is away. No human input during play.
-- **No Twitch chat hints.** Chat must not influence the game. (Chat moderation is the owner's job.)
+- **No Twitch chat hints.** Chat must not influence the game. (Chat moderation is the owner's job.) She can talk back to
+  viewers (`chat_replies`, `chat.py`), at most every 25 seconds, but chat only ever reaches her spoken replies, never decisions.
 - **First-timer mode.** She gets **no game knowledge**: no walkthrough, no destination names until
   visited, no type chart. She learns only from what she sees and is told on stream (her journal).
 - **General video-game sense is allowed** (`GAME_SENSE` in `brain.py`: head for new places, ignore button tips, menus

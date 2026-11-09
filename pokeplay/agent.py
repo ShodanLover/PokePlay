@@ -21,6 +21,7 @@ from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
 from .menus import Menu, MenuReader, forget_choice, new_move_power
 from .naming import MAX_CHARS, NamingScreen, clean_name
+from .chat import ChatListener
 from .highlights import Highlights
 from .hints import arrived, guide_section, hint_for, target_for
 from .narrator import Narrator
@@ -37,7 +38,8 @@ JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
 MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
 NO_TURNING_BACK = 6         # map decisions in a new place before she may go back the way she came
-GOAL_PATIENCE = 15         # decisions with no discovery before her current goal is dropped
+CHAT_REPLY_EVERY = 25       # seconds between answering viewers, so she keeps talking about the game too
+GOAL_PATIENCE = 15        # decisions with no discovery before her current goal is dropped
 EVENT_MAX_AGE = 6        # seconds after which something that happened is too old to react to
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
@@ -93,6 +95,9 @@ class Agent:
         self._failed_options: set[str] = set()      # map actions that just didn't work
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
+        channel = cfg.overlay.twitch_channel.strip().lower().rsplit("/", 1)[-1].lstrip("#")
+        self.chat = ChatListener(channel) if cfg.overlay.chat_replies and channel else None
+        self._last_chat_reply = 0.0
         self.highlights = Highlights(Path(cfg.brain.memory_file).resolve().parent / "logs")
         self._last_badges: int | None = None
         self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
@@ -140,6 +145,8 @@ class Agent:
         self.memory.save()
         self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
         self.news.start()
+        if self.chat:
+            self.chat.start()
         if self.cfg.commentary.enabled:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
 
@@ -348,6 +355,17 @@ class Agent:
         if self.cfg.commentary.enabled:
             self._queue_comment(text)
 
+    def _answer_chat(self) -> bool:
+        """Now and then, talk back to a viewer. This only ever affects what she says, never how she plays."""
+        if not self.chat or self.narrator.is_speaking() or time.time() - self._last_chat_reply < CHAT_REPLY_EVERY:
+            return False
+        message = self.chat.take()
+        if not message:
+            return False
+        self._last_chat_reply = time.time()
+        line = self.brain.reply_to_chat(*message, self._context or "You've only just started playing.")
+        return bool(line) and self._speak(line)
+
     def _queue_comment(self, text: str) -> None:
         self._events.put((time.time(), text))
 
@@ -358,6 +376,8 @@ class Agent:
             try:
                 batch = [self._events.get(timeout=2)]
             except queue.Empty:
+                if self._answer_chat():
+                    continue
                 quiet_for = time.time() - self.narrator.last_spoke
                 if silence and quiet_for >= silence and not self.narrator.is_speaking():
                     for _ in range(3):              # a line can be dropped as a repeat: try again
@@ -401,7 +421,7 @@ class Agent:
             return False
         self.brain.remember_said(text)
         self._last_said = time.time()
-        self.highlights.spoken(text, self.cfg.brain.obsession, was_news=self.brain.took_headline())
+        self.highlights.spoken(text, self.cfg.brain.obsession, was_news=self.brain.took_headline(text))
         self.narrator.say(text)
         return True
 
@@ -441,7 +461,7 @@ class Agent:
         except Exception:  # noqa: BLE001 - never let this get in the way of a battle
             return ""
         foe = info.enemy
-        if info.is_trainer or not foe or not s.balls or len(s.party) >= 6 or any(m.species == foe.species for m in s.party):
+        if info.is_trainer or not foe or not s.balls or any(m.species == foe.species for m in s.party):
             return ""                                   # nothing new to gain, so don't waste a ball
         if foe.hp * 3 <= foe.max_hp:
             return "Its HP is low, which makes it much easier to catch. Throw a ball now: open your Bag and use a POKé BALL."
@@ -768,7 +788,7 @@ class Agent:
         delivered = bool(self.memory.stats.get("carried_parcel")) and not carrying_parcel
         if s.balls:
             self._mart_turns = 0
-        want_balls = delivered and not s.balls and s.money >= 400 and len(s.party) < 6 and self._mart_turns < 30
+        want_balls = delivered and not s.balls and s.money >= 400 and self._mart_turns < 30
         if want_balls and s.map_name.endswith(" - Mart"):
             self._mart_turns += 1               # a limit, so she can't get stuck in a shop she can't work out
         hurt = self._team_badly_hurt(s)
