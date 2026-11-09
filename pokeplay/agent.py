@@ -35,7 +35,12 @@ KIND_ORDER = {"warp": 0, "exit": 1, "talk": 2, "train": 3, "explore": 4}
 BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported away",
                    6: "the wild Pokémon fled", 7: "caught it"}
 MAX_TALK_OPTIONS = 5
-ON_SCREEN_MAX_AGE = 20      # seconds that the game's latest text still counts as what's happening
+# Everyday words of playing the game: a line using one is about the game even if it names nothing on screen right now.
+GAME_WORDS = frozenset(
+    "pokemon pokemons game screen battle battles fight team trainer trainers rival route town city house door grass forest "
+    "cave attack attacks move moves level badge gym leader potion ball balls catch bag map center lab professor player "
+    "name named starter creature creatures opponent wild faint fainted heal healed health".split())
+ON_SCREEN_MAX_AGE = 20     # seconds that the game's latest text still counts as what's happening
 LOW_ATTACK_PP = 3          # this many attacks left in total on her lead Pokémon: time to go and heal
 NO_CATCHING = "A trainer's creature can never be caught: POKé BALLs only work on wild creatures, so don't use one here."
 BALL_ITEM = re.compile(r"\bBALL\b", re.I)
@@ -51,7 +56,7 @@ EVENT_MAX_AGE = 6        # seconds after which something that happened is too ol
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
-SPEAK_DECISION_CHANCE = 0.1 # the rest of her talking comes from comments, which vary far more
+SPEAK_DECISION_CHANCE = 0.2 # the rest of her talking comes from comments, which vary far more
 LONG_SILENCE = 15        # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
@@ -159,6 +164,7 @@ class Agent:
         print(f"Found {self.game.check_rom()}")
         self.game.load_tables()
         print("Read species, move and item data from the ROM.")
+        self._resume_saved_game()
         self._wait_for_brain(first=True)
         self._load_persona()
         start_overlay(self.overlay, self.cfg.overlay.port)
@@ -171,6 +177,18 @@ class Agent:
             self.chat.start()
         if self.cfg.commentary.enabled:
             threading.Thread(target=self._commentary_worker, daemon=True).start()
+
+    def _resume_saved_game(self) -> None:
+        """mGBA always opens at the title screen and she only saves to a state slot, so without this she'd start over."""
+        slot = self.cfg.emulator.autosave_slot
+        if not self.cfg.emulator.autosave_minutes or self.game.mode() != "other" or self.game.party():
+            return                                  # a game is already under way: leave it alone
+        self.emu.load_state(slot)
+        self.emu.wait_frames(30)
+        if self.game.party():
+            print(f"Picked up her game from save state slot {slot}.")
+        else:
+            print(f"No saved game in state slot {slot}, so she's starting from the title screen.")
 
     def _wait_for_brain(self, first: bool = False) -> None:
         delay = 10
@@ -521,10 +539,10 @@ class Agent:
             return True
 
         def words(text: str) -> set[str]:
-            return {w.removesuffix("'s") for w in _words(text) if len(w) >= 4 and w not in COMMON_WORDS}
+            return {w.removesuffix("'s") for w in _words(text.replace("é", "e").replace("É", "E"))}
 
-        known = words(" ".join(facts))
-        return not known or bool(known & words(line))
+        known = {w for w in words(" ".join(facts)) if len(w) >= 4 and w not in COMMON_WORDS}
+        return bool((known | GAME_WORDS) & words(line))
 
     def _speak(self, text: str, always_fresh: bool = False) -> bool:
         """Say a line out loud, unless it's basically a repeat of something she just said. True if it was said."""
@@ -796,6 +814,14 @@ class Agent:
                 self._event(f"You noticed: {lesson}")
 
     # ------------------------------------------------------------------ naming (hers)
+    def _names_in_use(self) -> list[str]:
+        """Her own name, her team's names and everything she's named so far, so each new name is a new one."""
+        names = [self.brain.name] + [found for note in self.memory.journal for found in re.findall(r"^You named .+ '(.+)'\.$", note)]
+        try:
+            return names + [mon.nickname for mon in self.game.party()]
+        except Exception:  # noqa: BLE001 - a name is still worth picking without this
+            return names
+
     def _name_something(self) -> None:
         if self._named_this_screen:
             self.emu.press("START", hold=2, wait=10)   # already typed: confirm with OK
@@ -807,7 +833,7 @@ class Agent:
         species = self.game.species_name(species_id) if kind in ("nickname", "caught") else ""
         self._wait_for_voice()
         self.overlay.update(thought="Thinking of a name...")
-        name, say = self.brain.choose_name(kind, MAX_CHARS.get(kind, 7), species, self._memory_text(short=True))
+        name, say = self.brain.choose_name(kind, MAX_CHARS.get(kind, 7), species, self._memory_text(short=True), self._names_in_use())
         if say:
             self._speak(say)
         self.overlay.update(thought=f"Typing the name: {name}")

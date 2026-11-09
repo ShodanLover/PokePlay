@@ -101,3 +101,6 @@ class Emulator:
 
     def save_state(self, slot: int) -> None:
         self.command(f"SAVESTATE {slot}")
+
+    def load_state(self, slot: int) -> None:
+        self.command(f"LOADSTATE {slot}")

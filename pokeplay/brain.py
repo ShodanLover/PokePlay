@@ -370,7 +370,8 @@ class Brain:
                 print(f"[brain] persona attempt failed: {e}")
         raise RuntimeError("The AI couldn't come up with a name. Is Ollama working? Try again.")
 
-    def choose_name(self, kind: str, max_chars: int, species: str = "", context: str = "") -> tuple[str, str]:
+    def choose_name(self, kind: str, max_chars: int, species: str = "", context: str = "",
+                    taken: list[str] | None = None) -> tuple[str, str]:
         """Pick an in-game name. Returns (name, what to say about it)."""
         what = {
             "player": "your own trainer character",
@@ -386,22 +387,28 @@ class Brain:
             + f"You get to type a name for {what}. It must be at most {max_chars} characters, "
             "using only English letters, digits, spaces and . , ! ? - ' "
             + ("This character is you, and whatever you type is the name you'll go by from now on. Choose "
-               "any name you like; it doesn't have to be the name you've used so far. " if kind == "player" else "")
+               "any name you like; it doesn't have to be the name you've used so far. " if kind == "player" else
+               "Give it a fresh name of its own, different from your own name and from anything you've named before. ")
             + 'Reply with JSON: {"name": "...", "say": "one or two sentences out loud about why you picked it"}'
         )
         system = self._system()
-        if kind == "player":          # otherwise "You are <old name>" makes her just pick that again
-            system = system.replace(self.name, "a new streamer who hasn't picked a name yet")
+        if kind in ("player", "rival", "nickname", "caught"):     # otherwise "You are <name>" makes her just pick that again
+            system = system.replace(self.name, "a new streamer who hasn't picked a name yet" if kind == "player" else "a streamer")
+        used = [t.lower() for t in (taken or []) if len(t) >= 3] if kind != "player" else []
         rejected = ""
         no_game_names = kind in ("player", "rival", "nickname", "caught")     # a first-timer wouldn't know them
         for _ in range(3 if no_game_names else 1):
             messages = [{"role": "system", "content": system}, {"role": "user", "content": prompt + rejected}]
             try:
-                data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120)))
+                data = json.loads(_extract_json(self._chat(messages, fmt=schema, max_tokens=120, temperature=0.9)))
             except Exception as e:  # noqa: BLE001
                 print(f"[brain] naming failed: {e}")
                 return "", ""
             name = str(data.get("name", "")).strip()
+            if any(old in name.lower() for old in used):
+                print(f"[brain] '{name}' is already in use; asking again")
+                rejected = f" You've already used '{name}'. Pick a completely different name."
+                continue
             if no_game_names and looks_pokemon_derived(name):
                 print(f"[brain] '{name}' sounds like it came from Pokémon; asking again")
                 rejected = f" You can't use '{name}'. Pick something completely different, with nothing from Pokémon in it."

@@ -47,5 +47,5 @@ chat_replies = false      # true = she answers viewers out loud (chat never affe
 
 [commentary]
 enabled = true            # react out loud to battles, level ups, etc.
-min_seconds_between = 30   # the shortest gap between her comments; viewers still get answered sooner
-max_silence_seconds = 60   # if she's been quiet this long, she thinks out loud about what's going on
+min_seconds_between = 15   # the shortest gap between her comments; viewers still get answered sooner
+max_silence_seconds = 25   # if she's been quiet this long, she thinks out loud about what's going on

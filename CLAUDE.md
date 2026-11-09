@@ -31,7 +31,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   safety: family-friendly, Twitch guidelines, no hate or harassment.
 - **She names herself when she makes her character.** The name she types on the game's player naming
   screen becomes her name (`persona.json`, not in git), replacing the one she invented on first launch
-  (she's currently **Ziggy**). Only a new game reaches that screen. `streamer_name` in `config.toml` must stay
+  (she's currently **Zorblax**). Only a new game reaches that screen. `streamer_name` in `config.toml` must stay
   empty, or it overrides her choice. New self-chosen names are blocked if they're Pokémon-derived.
 - **Personality:** offbeat, dry humor, gets a little unhinged when things go wrong, but **not cringe**.
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
@@ -43,6 +43,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   next story step on every map decision for the whole game, and every door shows its real name. Up to Misty, `ROUTE` in
   `hints.py` also picks the exit or door for her. She still does battles and talking. This replaces the first-timer
   rule for navigation; she's still told to act like it's all new to her.
+- **Picking up her game:** she never saves in-game, only to mGBA state slot 9 every 10 minutes. On startup, if mGBA is at the title
+  screen with an empty team, `_resume_saved_game` loads that slot. To start a new game on purpose, stop the bot and delete
+  `Pokemon - FireRed Version (USA).ss9` and `memory.json` first.
 - **Unattended play:** general rules keep her moving: impossible actions disappear, repeated ones rest, after 6
   decisions without anything new she can only pick what she's tried least (`_prefer_untried`), and a goal with no
   progress for 15 decisions is dropped along with the notes feeding it.
@@ -51,7 +54,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   every 30s. The first attempt saves the situation to `logs/stuck.jsonl`: read that to fix real causes.
 - **Comments stay on the game (owner's request):** she's given the latest on-screen text, and a line sharing no real word with
   what's happening isn't spoken (`_about_the_game`); headlines and the running joke are exempt.
-- **Talks less (owner's request):** at most one comment every 30s, and she thinks out loud after 60s of quiet
+- **How much she talks (owner's request):** at most one comment every 15s, and she thinks out loud after 25s of quiet
   (`[commentary]` in `config.toml`). Viewer replies skip that wait, open with "Hey {username}," (added in code) and are unhinged,
   still with no flirting with viewers, sexual content, threats or insults about who they are.
 - **Tone update (owner's request):** very unhinged, swearing allowed, and flirty. The flirting stays non-sexual and aimed

@@ -1303,6 +1303,8 @@ def test_her_planned_asides_are_still_allowed(tmp_path):
     assert agent._about_the_game("LeBron James would have dodged that.", ["PIDGEY used GUST!"])
     assert not agent._about_the_game("Soup is a state of mind.", ["PIDGEY used GUST!"])
     assert agent._about_the_game("Pidgey's wings are personally offensive.", ["PIDGEY used GUST!"])
+    assert agent._about_the_game("Just me and a screen that says Welcome to Pokémon.", ["Choose a name."])     # the game itself counts
+    assert agent._about_the_game("Why are there so many Pokémon in here?", [])
 
 
 def test_comment_prompt_asks_for_the_game_not_for_weirdness():
@@ -1473,6 +1475,58 @@ def test_nicknames_are_not_pokemon_names():
     replies = iter(['{"name": "Pikachu", "say": "no"}', '{"name": "Sprout", "say": "yes"}'])
     b._chat = lambda messages, **k: next(replies)
     assert b.choose_name("nickname", 10, "BULBASAUR") == ("Sprout", "yes")
+
+
+def test_a_fresh_mgba_picks_up_her_saved_game(tmp_path):
+    from types import SimpleNamespace as NS
+
+    def agent_at(mode, party):
+        agent, _ = _named_agent(tmp_path)
+        agent.loaded = []
+        team = list(party)
+
+        def load(slot):
+            agent.loaded.append(slot)
+            team.append(NS(hp=20))
+        agent.emu.load_state = load
+        agent.emu.wait_frames = lambda frames: None
+        agent.game.mode = lambda: mode
+        agent.game.party = lambda: team
+        return agent
+
+    title = agent_at("other", [])
+    title._resume_saved_game()
+    assert title.loaded == [9]
+    for mode, party in (("overworld", [NS(hp=20)]), ("other", [NS(hp=20)]), ("naming", []), ("dialog", [])):
+        running = agent_at(mode, party)                     # never yank her out of a game that's under way
+        running._resume_saved_game()
+        assert running.loaded == []
+
+    no_autosave = agent_at("other", [])
+    no_autosave.cfg.emulator.autosave_minutes = 0
+    no_autosave._resume_saved_game()
+    assert no_autosave.loaded == []
+
+
+def test_she_gives_everything_its_own_name(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay.brain import Brain
+
+    b = Brain("http://x", "m", streamer_name="Zorblax")
+    replies = iter(['{"name": "ZORBLAX", "say": "no"}', '{"name": "Zorblax2", "say": "no"}', '{"name": "Mildew", "say": "yes"}'])
+    sent = []
+    b._chat = lambda messages, **k: sent.append(messages) or next(replies)
+    assert b.choose_name("caught", 10, "RATTATA", "", ["Zorblax"]) == ("Mildew", "yes")
+    assert "Zorblax" not in sent[0][0]["content"] and "already used" in sent[1][1]["content"]
+
+    b._chat = lambda messages, **k: '{"name": "Zorblax", "say": "again"}'
+    assert b.choose_name("caught", 10, "RATTATA", "", ["Zorblax"]) == ("", "")      # the game's own name beats a repeat
+    assert b.choose_name("player", 7, "", "", ["Zorblax"]) == ("Zorblax", "again")  # only her own character may keep it
+
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.journal = ["You named your rival 'Blorp'.", "A tree blocked the way."]
+    agent.game.party = lambda: [NS(nickname="Mildew")]
+    assert agent._names_in_use() == ["Oldname", "Blorp", "Mildew"]
 
 
 def test_guesses_stay_out_of_her_journal(tmp_path):

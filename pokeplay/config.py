@@ -56,8 +56,8 @@ class OverlayConfig:
 @dataclass
 class CommentaryConfig:
     enabled: bool = True
-    min_seconds_between: float = 30   # the shortest gap between her comments; viewers still get answered sooner
-    max_silence_seconds: float = 60   # if she's been quiet this long, she thinks out loud
+    min_seconds_between: float = 15   # the shortest gap between her comments; viewers still get answered sooner
+    max_silence_seconds: float = 25   # if she's been quiet this long, she thinks out loud
 
 
 @dataclass
