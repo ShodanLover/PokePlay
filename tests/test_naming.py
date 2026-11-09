@@ -733,6 +733,46 @@ def test_battles_use_the_strongest_move_without_stopping_to_think(tmp_path):
     assert agent._choose_battle_action(info, labels, []) == 1 and asked == []
 
 
+def test_straight_paths_are_walked_in_one_stretch():
+    from pokeplay.overworld import stretches
+
+    assert stretches(["up", "up", "up", "left", "up"]) == [("up", 3), ("left", 1), ("up", 1)]
+    assert stretches([]) == []
+
+
+def _strider(positions, modes=None):
+    from types import SimpleNamespace as NS
+    from pokeplay.overworld import Overworld
+
+    states = iter([("overworld", 3, 0, *p) for p in positions])
+    presses = []
+    game = NS(state_light=lambda: next(states))
+    emu = NS(press=lambda keys, hold=0, wait=0: presses.append((keys, hold)), u8=lambda a: 0, wait_frames=lambda n: None)
+    return Overworld(emu, game, None), presses
+
+
+def test_stride_holds_the_direction_until_it_gets_there():
+    world, presses = _strider([(5, 9), (5, 9), (5, 8), (5, 7), (5, 7), (5, 6)])
+    assert world.stride("up", 3) == "moved"
+    assert world.steps_taken == 3
+    assert all(keys == "up+B" for keys, _ in presses) and len(presses) == 5
+
+
+def test_stride_notices_it_cannot_move():
+    world, presses = _strider([(5, 9)] * 40)
+    assert world.stride("up", 3) == "blocked"
+
+
+def test_bag_is_spelled_out_in_battle(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.game.state = lambda: NS(balls=[("POKé BALL", 5)], items=[("POTION", 1)])
+    assert agent._bag_line() == "IN YOUR BAG RIGHT NOW: POKé BALL x5, POTION x1."
+    agent.game.state = lambda: NS(balls=[], items=[])
+    assert agent._bag_line() == "YOUR BAG IS EMPTY."
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

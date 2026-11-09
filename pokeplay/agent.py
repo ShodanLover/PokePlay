@@ -412,8 +412,18 @@ class Agent:
             ("Things you've noticed in past battles:\n" + "\n".join(f"- {l}" for l in lessons)) if lessons
             else "You haven't learned anything about how battles work yet.",
         ]
+        parts.append(self._bag_line())
         parts.append(self._catch_nudge(info))
         return "\n".join(p for p in parts if p)      # only the battle: her notes and goal just distract her here
+
+    def _bag_line(self) -> str:
+        """Exactly what's in her bag, so she isn't guessing."""
+        try:
+            s = self.game.state()
+        except Exception:  # noqa: BLE001 - never let this get in the way of a battle
+            return ""
+        things = ", ".join(f"{name} x{count}" for name, count in s.balls + s.items)
+        return f"IN YOUR BAG RIGHT NOW: {things}." if things else "YOUR BAG IS EMPTY."
 
     def _catch_nudge(self, info: BattleInfo) -> str:
         """Wild battle, Poké Balls in the bag, room on the team: a new teammate is worth trying for."""

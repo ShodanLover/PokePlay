@@ -16,6 +16,7 @@ from .pathfinding import STEPS, find_path, reachable, walkable
 
 OPPOSITE = {"up": "down", "down": "up", "left": "right", "right": "left"}
 TEMP_BLOCK_SECONDS = 45
+STUCK_POLLS = 10                # short holds with no movement before a stretch counts as blocked
 BLOCKED_EXIT = "(blocked)"      # saved in her door links, so it survives restarts
 
 
@@ -28,6 +29,17 @@ def relative(x: int, y: int, tx: int, ty: int) -> str:
     if dx:
         parts.append(f"{abs(dx)} {'step' if abs(dx) == 1 else 'steps'} to the {'left' if dx < 0 else 'right'}")
     return " and ".join(parts) if parts else "right where you're standing"
+
+
+def stretches(path: list[str]) -> list[tuple[str, int]]:
+    """["up", "up", "left"] -> [("up", 2), ("left", 1)]: each straight run gets walked in one go."""
+    runs: list[tuple[str, int]] = []
+    for direction in path:
+        if runs and runs[-1][0] == direction:
+            runs[-1] = (direction, runs[-1][1] + 1)
+        else:
+            runs.append((direction, 1))
+    return runs
 
 
 def region(x: int, y: int, w: int, h: int) -> str:
@@ -240,6 +252,35 @@ class Overworld:
                 return "moved"
         return "blocked"
 
+    def stride(self, direction: str, tiles: int) -> str:
+        """Hold a direction for a whole straight stretch, like a person would. Returns 'moved', 'blocked' or 'changed'."""
+        before = self.game.state_light()
+        start = last = before[3:5]
+        held_without_moving = 0
+        for _ in range(tiles * 30):
+            moved = abs(last[0] - start[0]) + abs(last[1] - start[1])
+            self.emu.press(f"{direction}+B", hold=4 if moved >= tiles - 1 else 8, wait=0)
+            now = self.game.state_light()
+            if now[0] != "overworld" or now[1:3] != before[1:3]:
+                return "changed"
+            if now[3:5] != last:
+                self.steps_taken += abs(now[3] - last[0]) + abs(now[4] - last[1])
+                last = now[3:5]
+                self.visited.setdefault(self._key_of(now), set()).add(last)
+                held_without_moving = 0
+            else:
+                held_without_moving += 1
+            if abs(last[0] - start[0]) + abs(last[1] - start[1]) >= tiles:
+                self._wait_until_still()                # position updates as a step begins: let the last one finish
+                return "moved"
+            if held_without_moving >= STUCK_POLLS:
+                return "moved" if last != start else "blocked"
+        return "moved" if last != start else "blocked"
+
+    @staticmethod
+    def _key_of(light_state: tuple) -> tuple[int, int]:
+        return (light_state[1], light_state[2])
+
     def walk_to(self, goals: set[tuple[int, int]], s: GameState, allow: set[tuple[int, int]] = frozenset(),
                 max_replans: int = 6) -> Result:
         start_map = self._map_key(s)
@@ -262,16 +303,17 @@ class Overworld:
             if not path:
                 return Result("arrived")
             x, y = cur.x, cur.y
-            for direction in path:
-                r = self.step(direction)
+            for direction, tiles in stretches(path):
+                r = self.stride(direction, tiles)
                 if r == "changed":
                     now = self.game.state()
                     if self._map_key(now) != start_map:
                         return Result("warped", now.map_name)
                     return Result("interrupted", now.mode)
                 if r == "blocked":
+                    now = self.game.state_light()
                     dx, dy = STEPS[direction]
-                    self.temp_blocks[(*start_map, x + dx, y + dy)] = time.time() + TEMP_BLOCK_SECONDS
+                    self.temp_blocks[(*start_map, now[3] + dx, now[4] + dy)] = time.time() + TEMP_BLOCK_SECONDS
                     break
                 now = self.game.state_light()
                 x, y = now[3], now[4]
