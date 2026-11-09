@@ -1037,6 +1037,27 @@ def test_battle_team_menus_are_handled_by_code(tmp_path):
     assert chosen == [2, 1] and agent.prompts == []
 
 
+def test_switching_gives_up_instead_of_looping(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay.brain import Decision
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    agent._in_battle = True
+    agent.game.party = _team
+    agent.game.state = lambda: NS(items=[("Potion", 1)], balls=[], party=[NS(species=1)])
+    agent.brain.decide = lambda context, lines: agent.prompts.append(lines) or Decision("t", "", 0)
+    labels = ["Use GROWL (does no direct damage)", "Switch to a different Pokémon"]
+    picks = [agent._choose_battle_action(_battle_info(is_trainer=True), labels, []) for _ in range(4)]
+    assert picks[:3] == [1, 1, 1] and len(agent.prompts) == 1       # after three tries it stops forcing the switch
+
+    agent.game.party = lambda: [NS(hp=0, moves=[NS(power=15, pp=9)]), NS(hp=0, moves=[NS(power=15, pp=9)])]
+    agent.pressed.clear()
+    agent._party_menu_tries = 0
+    agent._menu_turn(Menu("party_choose", "Choose a Pokémon.", ["A", "B"]))
+    assert agent.pressed == ["B"]                                   # never picks a fainted one
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

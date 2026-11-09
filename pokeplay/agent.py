@@ -38,7 +38,8 @@ JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
 MENU_STREAK_LIMIT = 12      # this many menu choices in a row means she's lost in there, however varied they are
 NO_TURNING_BACK = 6         # map decisions in a new place before she may go back the way she came
-CHAT_REPLY_EVERY = 25       # seconds between answering viewers, so she keeps talking about the game too
+MAX_SWITCH_TRIES = 3        # attempts at switching Pokémon in one battle before giving up on it
+CHAT_REPLY_EVERY = 25      # seconds between answering viewers, so she keeps talking about the game too
 GOAL_PATIENCE = 15        # decisions with no discovery before her current goal is dropped
 EVENT_MAX_AGE = 6        # seconds after which something that happened is too old to react to
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
@@ -108,6 +109,7 @@ class Agent:
         self.highlights = Highlights(Path(cfg.brain.memory_file).resolve().parent / "logs")
         self._last_badges: int | None = None
         self._last_move: tuple[str, int, int] = ("", -1, 0)   # last battle choice, opponent's HP then, times in a row
+        self._switch_tries = self._party_menu_tries = 0     # attempts at switching in the current battle
         self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
         self._center_turns = 0                      # decisions spent at a Pokémon Center trying to heal
         self._came_from = ""                        # the place she was in before this one
@@ -488,8 +490,9 @@ class Agent:
         strongest = next((i for i, label in enumerate(labels) if "THE STRONGEST CHOICE" in label), None)
         if strongest is None:                   # no attack left to use, so don't sit there using moves that do nothing
             strongest = next((i for i, label in enumerate(labels) if label == "Try to run away"), None)
-        if strongest is None and self._attacker_slot(skip_active=True) is not None:
+        if strongest is None and self._switch_tries < MAX_SWITCH_TRIES and self._attacker_slot(skip_active=True) is not None:
             strongest = next((i for i, label in enumerate(labels) if label.startswith("Switch to")), None)
+            self._switch_tries += 1
         forced = strongest is not None and (labels[strongest] == "Try to run away" or labels[strongest].startswith("Switch to"))
         if strongest is not None and (forced or not self._catch_nudge(info)):
             self._activity = labels[strongest][:120]                    # the math is done, so no need to stop and think
@@ -522,12 +525,19 @@ class Agent:
 
     def _battle_party_menu(self, menu: Menu) -> None:
         """Switching in battle is mechanics, so the code does it: pick someone who can attack, then confirm."""
+        self._party_menu_tries += 1
+        if self._party_menu_tries > MAX_SWITCH_TRIES * 2:       # it isn't working, so back out and fight on
+            print("[battle] team menu keeps failing; backing out")
+            self.emu.press("B", hold=2, wait=20)
+            return
         if menu.kind == "party_action":
             options = menu.all_options()
             slot = next((i for i, o in enumerate(options) if "SHIFT" in o.upper() or "SWITCH" in o.upper()), 0)
         else:
             slot = self._attacker_slot(skip_active=True)
-            slot = 0 if slot is None else slot
+            if slot is None:                                    # nobody healthy to send: never pick a fainted one
+                self.emu.press("B", hold=2, wait=20)
+                return
         print(f"[battle] team menu: {menu.all_options()[slot][:60]}")
         self.menus.choose(menu, slot)
 
@@ -933,6 +943,7 @@ class Agent:
     def _overworld_turn(self) -> None:
         self._menu_picks.clear()
         self._leaving_menus = False
+        self._switch_tries = self._party_menu_tries = 0     # back on the map, so the next battle starts fresh
         s = self.game.state()
         self._changes = self._note_changes(s)
         if self._last_badges is not None and s.badges > self._last_badges:
