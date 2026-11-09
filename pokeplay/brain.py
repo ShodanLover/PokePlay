@@ -163,6 +163,7 @@ RANDOM_SUBJECTS = [
 NOT_FOR_STREAM = re.compile(
     r"\b(?:sex\w*|naked|nude|horny|aroused|erotic|pregnan\w*|baby with|in bed|bedroom|seduc\w*|moan\w*|undress\w*"
     r"|strip\w*|thigh\w*|boob\w*|breast\w*|lingerie|making love|make love"
+    r"|fuck me|by the balls"
     r"|walkthrough|hints?|next step|told to|supposed to do)\b", re.I)     # the guide stays a secret from viewers
 
 OBSESSION_CHANCE = 0.1    # how often a spoken comment includes her running bit (1 in 10)
