@@ -1008,6 +1008,35 @@ def test_switching_pokemon_is_not_an_evolution():
     assert _same_mon(pikachu, NS(nickname="Pikachu", species_name="IVYSAUR"))
 
 
+def _team():
+    from types import SimpleNamespace as NS
+
+    return [NS(hp=25, moves=[NS(power=0, pp=4), NS(power=35, pp=0)]), NS(hp=0, moves=[NS(power=15, pp=9)]),
+            NS(hp=12, moves=[NS(power=15, pp=9)])]
+
+
+def test_trainer_fight_with_no_attacks_switches_to_someone_who_can(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.brain.decide = lambda context, lines: 1 / 0               # must not need the model
+    agent.game.party = _team
+    labels = ["Use GROWL (does no direct damage)", "Open your Bag (items, Poké Balls)", "Switch to a different Pokémon"]
+    assert agent._attacker_slot(skip_active=True) == 2              # skips the fainted one
+    assert agent._choose_battle_action(_battle_info(is_trainer=True), labels, []) == 2
+
+
+def test_battle_team_menus_are_handled_by_code(tmp_path):
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    agent._in_battle = True
+    agent.game.party = _team
+    chosen = []
+    agent.menus.choose = lambda menu, slot: chosen.append(slot)
+    agent._menu_turn(Menu("party_choose", "Choose a Pokémon.", ["A", "B", "C"]))
+    agent._menu_turn(Menu("party_action", "What to do?", ["SUMMARY", "SHIFT", "CANCEL"]))
+    assert chosen == [2, 1] and agent.prompts == []
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

@@ -488,7 +488,10 @@ class Agent:
         strongest = next((i for i, label in enumerate(labels) if "THE STRONGEST CHOICE" in label), None)
         if strongest is None:                   # no attack left to use, so don't sit there using moves that do nothing
             strongest = next((i for i, label in enumerate(labels) if label == "Try to run away"), None)
-        if strongest is not None and (not self._catch_nudge(info) or labels[strongest] == "Try to run away"):
+        if strongest is None and self._attacker_slot(skip_active=True) is not None:
+            strongest = next((i for i, label in enumerate(labels) if label.startswith("Switch to")), None)
+        forced = strongest is not None and (labels[strongest] == "Try to run away" or labels[strongest].startswith("Switch to"))
+        if strongest is not None and (forced or not self._catch_nudge(info)):
             self._activity = labels[strongest][:120]                    # the math is done, so no need to stop and think
             print(f"[battle] {labels[strongest]}")
             self.history.append(f"In battle: {labels[strongest]}")
@@ -505,6 +508,28 @@ class Agent:
         self._apply_decision(d, labels[chosen])
         self.history.append(f"In battle: {labels[chosen]}")
         return chosen
+
+    def _attacker_slot(self, skip_active: bool) -> int | None:
+        """The first team member who can still fight and has an attack with PP left."""
+        try:
+            party = self.game.party()
+        except Exception:  # noqa: BLE001 - never let this get in the way of a battle
+            return None
+        for slot, mon in enumerate(party):
+            if (slot or not skip_active) and mon.hp > 0 and any(mv.power and mv.pp > 0 for mv in mon.moves):
+                return slot
+        return None
+
+    def _battle_party_menu(self, menu: Menu) -> None:
+        """Switching in battle is mechanics, so the code does it: pick someone who can attack, then confirm."""
+        if menu.kind == "party_action":
+            options = menu.all_options()
+            slot = next((i for i, o in enumerate(options) if "SHIFT" in o.upper() or "SWITCH" in o.upper()), 0)
+        else:
+            slot = self._attacker_slot(skip_active=True)
+            slot = 0 if slot is None else slot
+        print(f"[battle] team menu: {menu.all_options()[slot][:60]}")
+        self.menus.choose(menu, slot)
 
     def _move_not_working(self, label: str, info: BattleInfo) -> bool:
         """She's used this twice in a row and the opponent's HP hasn't moved."""
@@ -528,6 +553,9 @@ class Agent:
         return [i for i in everything if "your Bag" not in labels[i]] or everything
 
     def _choose_next_pokemon(self, alive: list[tuple[int, Mon]]) -> int:
+        for position, (_, mon) in enumerate(alive):         # send out whoever can actually attack
+            if any(mv.power and mv.pp > 0 for mv in mon.moves):
+                return position
         labels = [f"Send out {m.summary()}" for _, m in alive]
         context = self._memory_text(short=True) + "\n\nYour Pokémon fainted! Choose who to send out next."
         self._wait_for_voice()
@@ -552,6 +580,9 @@ class Agent:
             slot = forget_choice(self.game, menu.data["moves"], menu.data["new_move"])
             print(f"[moves] {menu.all_options()[slot]}")
             self.menus.choose(menu, slot)
+            return
+        if self._in_battle and menu.kind in ("party_choose", "party_action"):
+            self._battle_party_menu(menu)
             return
         browsing = menu.kind not in GAME_QUESTIONS and not self._in_battle
         if browsing and self._leaving_menus:
