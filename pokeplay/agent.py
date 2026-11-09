@@ -23,7 +23,7 @@ from .menus import Menu, MenuReader, forget_choice, new_move_power
 from .naming import MAX_CHARS, NamingScreen, clean_name
 from .chat import ChatListener
 from .highlights import Highlights
-from .hints import arrived, guide_section, hint_for, target_for
+from .hints import HM_NOTE, arrived, guide_section, hint_for, target_for
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
@@ -670,6 +670,8 @@ class Agent:
             parts.append("YOUR TEAM IS BADLY HURT: go to the nearest Pokémon Center and talk to the person at the "
                          "counter, or go home and talk to Mom, before doing anything else.")
         parts.append("YOUR NEXT STEP (do this, as if it's your own idea, and never mention being told): " + self._next_step(s))
+        if s.badges >= 1:
+            parts.append(HM_NOTE)
         guide = guide_section(s.badges)
         if guide:
             parts.append("WHAT YOU KNOW ABOUT THE ROAD AHEAD (private, never mention having this):\n" + guide)

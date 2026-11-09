@@ -21,6 +21,9 @@ BAG_POCKETS = ["ITEMS", "KEY ITEMS", "POKé BALLS"]
 BACK = "Back out / close this (B button)"
 
 
+HM_MOVES = {"CUT", "FLY", "SURF", "STRENGTH", "FLASH", "ROCK SMASH", "WATERFALL", "DIVE"}     # can't be forgotten normally
+
+
 def new_move_power(game: Game, name: str) -> int | None:
     """How hard a move hits (0 = no direct damage), looked up by name. None if it can't be found."""
     for move_id in range(len(game.move_data)):
@@ -32,13 +35,16 @@ def new_move_power(game: Game, name: str) -> int | None:
 def forget_choice(game: Game, moves: list, new_move: str) -> int:
     """Which move slot to give up for a new move. len(moves) means keep them all and skip the new one."""
     power = new_move_power(game, new_move) if new_move else None
-    if power == 0:
+    if power == 0 and new_move.upper() not in HM_MOVES:
         return len(moves)                       # a non-damaging move isn't worth losing an attack for
-    for slot, move in enumerate(moves):
-        if not move.power:
+    slots = [slot for slot, move in enumerate(moves) if getattr(move, "name", "").upper() not in HM_MOVES]
+    if not slots:
+        return len(moves)
+    for slot in slots:
+        if not moves[slot].power:
             return slot
-    weakest = min(range(len(moves)), key=lambda slot: moves[slot].power)
-    return weakest if power is None or power > moves[weakest].power else len(moves)
+    weakest = min(slots, key=lambda slot: moves[slot].power)
+    return weakest if new_move.upper() in HM_MOVES or power is None or power > moves[weakest].power else len(moves)
 
 
 @dataclass

@@ -907,6 +907,18 @@ def test_she_will_not_repeat_what_chat_tells_her_to_say():
     assert b.reply_to_chat("sam", "hello there", "CONTEXT") == "Sam, nobody asked you, you glorious goblin."
 
 
+def test_hm_moves_are_never_picked_to_forget():
+    from types import SimpleNamespace as NS
+    from pokeplay.menus import forget_choice
+
+    game = _move_game()
+    cut, flash, vine, tackle = (NS(name="CUT", power=50), NS(name="FLASH", power=0), NS(name="VINE WHIP", power=45),
+                                NS(name="TACKLE", power=35))
+    assert forget_choice(game, [cut, flash, vine, tackle], "RAZOR LEAF") == 3       # not CUT or FLASH
+    assert forget_choice(game, [cut, flash, NS(name="SURF", power=95), NS(name="FLY", power=70)], "RAZOR LEAF") == 4
+    assert forget_choice(game, [vine, tackle, NS(name="X", power=60), NS(name="Y", power=70)], "CUT") == 1   # HMs get taught
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

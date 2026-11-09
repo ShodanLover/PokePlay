@@ -48,6 +48,11 @@ GUIDE_HEADINGS = ("Pallet Town to Pewter City", "Mt. Moon to Vermilion City", "L
                   "Saffron City to Viridian City", "Indigo Plateau")
 GUIDE_FOR_BADGES = (0, 1, 1, 2, 2, 3, 3, 3, 4)      # which part of the owner's route notes applies at each badge count
 GUIDE_MAX_CHARS = 900                               # keeps her prompt short, which keeps her fast
+HM_NOTE = ("About HMs: an HM is a disc from your bag that teaches a move to a team member. A team member has to know the "
+           "move, and you need the right badge, before you can use it outside battle. Once learned, an HM move can't be "
+           "forgotten like normal moves. Cut clears small thin trees, Rock Smash breaks cracked rocks, Strength pushes big "
+           "boulders, Surf crosses water, Waterfall climbs waterfalls, Flash lights dark caves, and Fly travels to towns "
+           "you've visited. To use one, walk up to the obstacle, check it, and say yes.")
 BUY_BALLS = "You're out of POKé BALLs. Go into this town's Mart, talk to the clerk, choose BUY, and buy 5 POKé BALLs."
 MART_CITIES = ("Viridian City", "Pewter City", "Cerulean City", "Lavender Town", "Vermilion City", "Fuchsia City",
                "Cinnabar Island", "Saffron City")
