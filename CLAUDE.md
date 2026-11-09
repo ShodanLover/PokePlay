@@ -36,6 +36,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
   is no longer spoken). She doesn't greet or address viewers: she can't see them. "Ugh" is stripped from her speech, and lines with "chaos"/"chaotic" aren't
   spoken. Style rules are in `brain.py` (`DEFAULT_STYLE`), and the `speaking_style` config overrides them.
+- **Walkthrough:** `LATER_STEPS` and `BY_BADGES` in `hints.py` are written in our own words. Don't paste third-party
+  guides into the project. She only tries to catch species she doesn't have, and buys Poké Balls when out and in a Mart town.
 - **Guided play (owner changed this on 2026-11-08):** she was too lost to be watchable, so `hints.py` tells her the
   next story step on every map decision for the whole game, and every door shows its real name. Up to Misty, `ROUTE` in
   `hints.py` also picks the exit or door for her. She still does battles and talking. This replaces the first-timer

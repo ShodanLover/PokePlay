@@ -90,6 +90,7 @@ class Agent:
         self._failed_options: set[str] = set()      # map actions that just didn't work
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
+        self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
         self._came_from = ""                        # the place she was in before this one
         self._decisions_here = 0
         self._snapshot: dict | None = None          # what she last knew about, to spot what changed
@@ -431,9 +432,13 @@ class Agent:
             s = self.game.state()
         except Exception:  # noqa: BLE001 - never let this get in the way of a battle
             return ""
-        if info.is_trainer or not s.balls or len(s.party) >= 6:
-            return ""
-        return "You have Poké Balls and room on your team, so try catching this one: open your Bag and throw a ball."
+        foe = info.enemy
+        if info.is_trainer or not foe or not s.balls or len(s.party) >= 6 or any(m.species == foe.species for m in s.party):
+            return ""                                   # nothing new to gain, so don't waste a ball
+        if foe.hp * 3 <= foe.max_hp:
+            return "Its HP is low, which makes it much easier to catch. Throw a ball now: open your Bag and use a POKé BALL."
+        return ("You don't have one of these yet. The lower its HP, the easier it is to catch, so weaken it with an "
+                "attack first, without knocking it out, then throw a ball.")
 
     def _choose_battle_action(self, info: BattleInfo, labels: list[str], choices: list[Choice]) -> int:
         context = self._battle_context(info)
@@ -497,6 +502,8 @@ class Agent:
         cursor = f" (the cursor is on: {options[menu.cursor]})" if 0 <= menu.cursor < len(options) else ""
         context = (self._memory_text(short=True) + f"\n\nON SCREEN: {menu.title}{cursor}\n"
                    "You navigate menus one choice at a time, like using a controller.")
+        if self.memory.places.get(self._last_map, "").endswith(" - Mart"):
+            context += "\nYou came here to buy POKé BALLs: choose BUY, then POKé BALL, and buy 5."
         lines = list(options)
         if browsing:
             for i, option in enumerate(options):
@@ -740,7 +747,13 @@ class Agent:
         if carrying_parcel:
             self.memory.stats["carried_parcel"] = 1
         delivered = bool(self.memory.stats.get("carried_parcel")) and not carrying_parcel
-        return hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered)
+        if s.balls:
+            self._mart_turns = 0
+        want_balls = delivered and not s.balls and s.money >= 400 and len(s.party) < 6 and self._mart_turns < 30
+        if want_balls and s.map_name.endswith(" - Mart"):
+            self._mart_turns += 1               # a limit, so she can't get stuck in a shop she can't work out
+        return hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered,
+                        want_balls=want_balls, place=s.map_name)
 
     def _follow_route(self, options: list, s: GameState) -> list:
         """Where a route is known, the exit or door for her next step is the one she takes. [] if there isn't one."""

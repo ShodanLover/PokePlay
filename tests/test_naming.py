@@ -523,7 +523,11 @@ def test_hints_follow_her_progress():
     assert h.hint_for(1, True, [], ["Pewter City"], True) == h.TO_ROUTE_3
     assert h.hint_for(1, True, [], ["Mt Moon - 1F"], True) == h.THROUGH_MT_MOON
     assert h.hint_for(1, True, [], ["Cerulean City"], True) == h.MISTY
-    assert h.hint_for(8, True, [], [], True) == h.BY_BADGES[8] and h.hint_for(99, True, [], [], True) == h.BY_BADGES[8]
+    assert h.hint_for(8, True, [], ["Victory Road - 1F"], True) == h.BY_BADGES[8]
+    assert h.hint_for(99, True, [], ["Victory Road - 1F"], True) == h.BY_BADGES[8]
+    assert "Victory Road" in h.hint_for(8, True, [], [], True)
+    assert "Sea Cottage" in h.hint_for(2, True, [], [], True)
+    assert h.hint_for(2, True, [], ["Route 25 - Sea Cottage", "Vermilion City"], True) == h.BY_BADGES[2]
 
 
 def test_she_is_told_exactly_what_changed(tmp_path):
@@ -635,7 +639,7 @@ def test_she_takes_the_door_for_her_next_step(tmp_path):
     mart = NS(kind="warp", label="door", dest="Viridian City - Mart", key="b")
     north = NS(kind="exit", label="Leave this area by the north side (x)", dest="", key="c")
     agent.memory.places["3.1"] = "Viridian City"
-    state = NS(badges=0, party=[1], key_items=[], map_name="Viridian City")
+    state = NS(badges=0, party=[1], key_items=[], map_name="Viridian City", balls=[], money=0)
     assert agent._follow_route([house, mart, north], state) == [mart]
     assert agent._follow_route([house, north], state) == []                             # door not reachable: her call
     state.badges = 2
@@ -648,7 +652,7 @@ def test_once_at_the_destination_she_talks_instead_of_leaving(tmp_path):
     agent, _ = _named_agent(tmp_path)
     door = NS(kind="warp", label="door", dest="Pallet Town", key="out")
     oak, aide = NS(kind="talk", label="t", dest="", key="oak"), NS(kind="talk", label="t", dest="", key="aide")
-    state = NS(badges=0, party=[1], key_items=["OAK'S PARCEL"], map_name="Pallet Town - Professor Oak's Lab")
+    state = NS(badges=0, party=[1], key_items=["OAK'S PARCEL"], map_name="Pallet Town - Professor Oak's Lab", balls=[], money=0)
     assert agent._follow_route([door, oak, aide], state) == [oak, aide]
     agent.pick_counts["aide"] = 2
     assert agent._follow_route([door, oak, aide], state) == [oak]
@@ -771,6 +775,29 @@ def test_bag_is_spelled_out_in_battle(tmp_path):
     assert agent._bag_line() == "IN YOUR BAG RIGHT NOW: POKé BALL x5, POTION x1."
     agent.game.state = lambda: NS(balls=[], items=[])
     assert agent._bag_line() == "YOUR BAG IS EMPTY."
+
+
+def test_catching_goes_for_new_species_and_low_hp(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    weedle = NS(species=13, hp=20, max_hp=20)
+    agent.game.state = lambda: NS(balls=[("POKé BALL", 3)], party=[NS(species=1)])
+    assert "weaken it" in agent._catch_nudge(NS(is_trainer=False, enemy=weedle))
+    assert "Throw a ball now" in agent._catch_nudge(NS(is_trainer=False, enemy=NS(species=13, hp=4, max_hp=20)))
+    assert agent._catch_nudge(NS(is_trainer=True, enemy=weedle)) == ""
+    agent.game.state = lambda: NS(balls=[("POKé BALL", 3)], party=[NS(species=1), NS(species=13)])
+    assert agent._catch_nudge(NS(is_trainer=False, enemy=weedle)) == ""     # already has one
+
+
+def test_buying_balls_only_in_towns_with_a_mart():
+    from pokeplay import hints as h
+
+    assert h.hint_for(0, True, [], ["Viridian City"], True, want_balls=True, place="Viridian City") == h.BUY_BALLS
+    assert h.hint_for(0, True, [], ["Viridian Forest"], True, want_balls=True, place="Viridian Forest") != h.BUY_BALLS
+    assert h.target_for(h.BUY_BALLS, "Pewter City") == "Pewter City - Mart"
+    assert h.target_for(h.BUY_BALLS, "Pewter City - Mart") == ""
+    assert h.arrived(h.BUY_BALLS, "Pewter City - Mart")
 
 
 def test_impossible_actions_stop_being_offered(tmp_path):

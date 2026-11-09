@@ -2,21 +2,45 @@
 
 from __future__ import annotations
 
-# What to do after the first two badges. Index = number of badges.
+# The rest of the game, in our own words. For each badge count: (a place she hasn't reached yet, what to do), in order,
+# then BY_BADGES once she's been everywhere on that list.
+LATER_STEPS = {
+    2: [("Route 25 - Sea Cottage", "From Cerulean City go north over the bridge on Route 24, then east along Route 25 to "
+                                   "the Sea Cottage, and talk to Bill. He'll give you a ticket for a ship."),
+        ("Vermilion City", "From Cerulean City go south through Route 5, the Underground Path and Route 6 to Vermilion City.")],
+    3: [("Rock Tunnel - 1F", "From Cerulean City go east on Route 9, cutting down the small tree in the way, then follow "
+                             "Route 10 to Rock Tunnel."),
+        ("Lavender Town", "Go through Rock Tunnel and out the south side to Lavender Town."),
+        ("Celadon City", "From Lavender Town go west along Route 8 and through the Underground Path to Celadon City.")],
+    4: [("Rocket Hideout - B1F", "In Celadon City go into the Game Corner and press the switch behind the poster at the "
+                                 "back. Go down and beat the villains' boss to get the Silph Scope."),
+        ("Pokémon Tower - 1F", "Go to Lavender Town and climb Pokémon Tower to rescue Mr. Fuji. He gives you a flute."),
+        ("Fuchsia City", "From Lavender Town go south along Routes 12 to 15, using the flute to wake the sleeping "
+                         "creature blocking the road, to reach Fuchsia City.")],
+    5: [("Safari Zone - Center", "In Fuchsia City enter the Safari Zone and reach the Secret House at the far end to "
+                                 "get the move that crosses water. The Warden gives you the move that pushes boulders."),
+        ("Saffron City", "Go to Saffron City. Get the drink from the mansion in Celadon City if the guards stop you."),
+        ("Silph Co - 1F", "In Saffron City go into Silph Co and climb to the top, beating the villains' boss.")],
+    6: [("Cinnabar Island", "Surf south from Pallet Town to Cinnabar Island."),
+        ("Pokémon Mansion - 1F", "On Cinnabar Island go into the Pokémon Mansion and find the key to the Gym.")],
+    8: [("Victory Road - 1F", "Heal up and buy potions, then go west from Viridian City along Routes 22 and 23 to Victory Road.")],
+}
+# What to do once she's been everywhere for that badge count. Index = number of badges.
 BY_BADGES = [
     "",
     "",
-    "Go south to the port city and get on the big ship there. Learn the move that cuts small trees, then "
-    "challenge the port city's gym.",
-    "Go east through the dark tunnel to the small town, then west to the big city with the department store, "
-    "and challenge the gym there.",
-    "Clear out the villains hiding under the game corner, then visit the haunted tower in the small town. After "
-    "that, head south to the city by the sea and challenge its gym.",
-    "Go to the big city in the middle of the map, rescue the office tower from the villains, and challenge the gym there.",
-    "Learn to cross water, then surf south to the volcano island and challenge the gym there.",
-    "Go back to the first city with the gym that used to be closed, and challenge it.",
-    "Go west of the first city through the road of gates, through the long cave, and challenge the final four trainers.",
+    "In Vermilion City board the ship with your ticket, get the tree-cutting move from the captain and teach it to "
+    "your team, then cut the small tree at the Gym and beat the leader, Lt. Surge.",
+    "In Celadon City, heal at the Pokémon Center, then go into the Gym and beat the leader, Erika.",
+    "In Fuchsia City, heal at the Pokémon Center, then go into the Gym and beat the leader, Koga.",
+    "In Saffron City, heal at the Pokémon Center, then go into the Gym and beat the leader, Sabrina.",
+    "On Cinnabar Island, heal at the Pokémon Center, then use the key to go into the Gym and beat the leader, Blaine.",
+    "Go back to Viridian City, go into the Gym that used to be closed, and beat the leader, Giovanni.",
+    "Go through Victory Road to the Indigo Plateau, heal, and beat the Elite Four and the Champion.",
 ]
+BUY_BALLS = "You're out of POKé BALLs. Go into this town's Mart, talk to the clerk, choose BUY, and buy 5 POKé BALLs."
+MART_CITIES = ("Viridian City", "Pewter City", "Cerulean City", "Lavender Town", "Vermilion City", "Fuchsia City",
+               "Cinnabar Island", "Saffron City")
 NO_TEAM = ("Leave Pallet Town by the north side. Someone will stop you and take you to the lab. Then choose one of "
            "the balls on the table to get your first partner.")
 PARCEL = "You're carrying Oak's Parcel. Go south down Route 1 to Pallet Town, go into Professor Oak's Lab, and talk to him."
@@ -53,6 +77,10 @@ DESTINATIONS = {GET_PARCEL: "Viridian City - Mart", PARCEL: "Pallet Town - Profe
 
 def target_for(step: str, place: str) -> str:
     """The exit direction or door name she should take now, or "" to leave it up to her."""
+    if step == BUY_BALLS:
+        if arrived(step, place):
+            return ""
+        return f"{place} - Mart" if place in MART_CITIES else place.split(" - ")[0]
     route = ROUTE.get(step)
     if not route or arrived(step, place):       # no route for this step, or she's arrived: talk, fight, explore
         return ""
@@ -63,19 +91,28 @@ def target_for(step: str, place: str) -> str:
 
 def arrived(step: str, place: str) -> bool:
     """She's at the place this step needs, so the job now is talking or fighting, not leaving."""
+    if step == BUY_BALLS:
+        return place.endswith(" - Mart")
     return DESTINATIONS.get(step) == place
 
 
-def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str], delivered: bool) -> str:
+def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str], delivered: bool,
+             want_balls: bool = False, place: str = "") -> str:
     def been(name: str) -> bool:
-        return any(name in place for place in places)
+        return any(name in visited for visited in places)
 
     if not has_team:
         return NO_TEAM
     if any("PARCEL" in item.upper() for item in key_items):
         return PARCEL
+    if want_balls and place.split(" - ")[0] in MART_CITIES:     # only while she's in a town that has a Mart
+        return BUY_BALLS
     if badges >= 2:
-        return BY_BADGES[min(badges, len(BY_BADGES) - 1)]
+        badges = min(badges, len(BY_BADGES) - 1)
+        for marker, step in LATER_STEPS.get(badges, []):
+            if not been(marker):
+                return step
+        return BY_BADGES[badges]
     if badges == 1:
         if been("Cerulean City"):
             return MISTY
