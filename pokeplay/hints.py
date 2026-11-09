@@ -52,11 +52,17 @@ BACK_TO_CENTER = "Your lead Pokémon has no attacks left. Go back to the nearest
 TO_NEAREST_CENTER = {"Route 1": "north", "Route 2": "north", "Route 3": "west", "Route 22": "east", "Pallet Town": "north",
                      "Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
                      "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"}
-HM_NOTE = ("About HMs: an HM is a disc from your bag that teaches a move to a team member. A team member has to know the "
-           "move, and you need the right badge, before you can use it outside battle. Once learned, an HM move can't be "
-           "forgotten like normal moves. Cut clears small thin trees, Rock Smash breaks cracked rocks, Strength pushes big "
-           "boulders, Surf crosses water, Waterfall climbs waterfalls, Flash lights dark caves, and Fly travels to towns "
-           "you've visited. To use one, walk up to the obstacle, check it, and say yes.")
+HM_TEACHING = ("To teach an HM: open the main menu, choose BAG, go to the key items pocket, open the TM CASE, pick the HM, "
+               "choose USE, then pick a team member who can learn it.")
+HM_NOTE = ("About HMs: when a step needs an HM move, a team member must have learned that move first, and you need the "
+           "right badge to use it outside battle. Having the HM in your bag is not enough. " + HM_TEACHING + " Once "
+           "learned, an HM move can't be forgotten like normal moves. To use one, walk up to the obstacle, check it, and "
+           "say yes. Where they come from: CUT from the captain on the ship in Vermilion City (clears small thin trees, "
+           "needs the second badge). FLY from a house on Route 16 (travel to towns you've visited, needs the third badge). "
+           "SURF from the Secret House in the Safari Zone (crosses water, needs the fifth badge). STRENGTH from the Warden "
+           "in Fuchsia City after returning his teeth (pushes boulders, needs the fourth badge). FLASH from the "
+           "professor's aide on Route 2 once you've caught enough kinds of creature (lights dark caves, needs the first "
+           "badge).")
 BUY_BALLS = "You're out of POKé BALLs. Go into this town's Mart, talk to the clerk, choose BUY, and buy 5 POKé BALLs."
 MART_CITIES = ("Viridian City", "Pewter City", "Cerulean City", "Lavender Town", "Vermilion City", "Fuchsia City",
                "Cinnabar Island", "Saffron City")
@@ -121,6 +127,20 @@ def arrived(step: str, place: str) -> bool:
     if step == BUY_BALLS:
         return place.endswith(" - Mart")
     return DESTINATIONS.get(step) == place
+
+
+def guide_hms(path: Path = GUIDE_PATH) -> str:
+    """The HMs part of the owner's route notes, or "" if it isn't there."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    start = text.find("## HMs")
+    if start == -1:
+        return ""
+    body = text[start + len("## HMs"):]
+    end = body.find("\n#")
+    return (body if end == -1 else body[:end]).strip()[:GUIDE_MAX_CHARS]
 
 
 def guide_section(badges: int, path: Path = GUIDE_PATH) -> str:

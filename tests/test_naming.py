@@ -1058,6 +1058,29 @@ def test_switching_gives_up_instead_of_looping(tmp_path):
     assert agent.pressed == ["B"]                                   # never picks a fainted one
 
 
+def test_hm_notes_explain_teaching_and_sources(tmp_path):
+    from pokeplay import hints as h
+
+    for needed in ("TM CASE", "must have learned", "CUT from", "FLY from", "SURF from", "STRENGTH from", "FLASH from"):
+        assert needed in h.HM_NOTE
+    notes = tmp_path / "guide.md"
+    notes.write_text("# Notes\n## Badges\nStuff.\n## HMs\nCut: ship.\n## Main story\nGo.\n", encoding="utf-8")
+    assert h.guide_hms(notes) == "Cut: ship."
+    assert h.guide_hms(tmp_path / "missing.md") == ""
+
+
+def test_bag_menus_explain_teaching_an_hm(tmp_path):
+    from pokeplay.hints import HM_TEACHING
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    contexts = []
+    decide = agent.brain.decide
+    agent.brain.decide = lambda context, lines: contexts.append(context) or decide(context, lines)
+    agent._menu_turn(Menu("bag", "Your Bag is open on the ITEMS pocket.", ["POTION"]))
+    assert HM_TEACHING in contexts[0]
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

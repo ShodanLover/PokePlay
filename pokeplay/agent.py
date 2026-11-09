@@ -23,7 +23,7 @@ from .menus import Menu, MenuReader, forget_choice, new_move_power
 from .naming import MAX_CHARS, NamingScreen, clean_name
 from .chat import ChatListener
 from .highlights import Highlights
-from .hints import HM_NOTE, arrived, guide_section, hint_for, target_for
+from .hints import HM_NOTE, HM_TEACHING, arrived, guide_hms, guide_section, hint_for, target_for
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
@@ -609,6 +609,8 @@ class Agent:
         cursor = f" (the cursor is on: {options[menu.cursor]})" if 0 <= menu.cursor < len(options) else ""
         context = (self._memory_text(short=True) + f"\n\nON SCREEN: {menu.title}{cursor}\n"
                    "You navigate menus one choice at a time, like using a controller.")
+        if re.search(r"\bbag\b|tm case", menu.title, re.I):
+            context += f"\n{HM_TEACHING}"
         if self.memory.places.get(self._last_map, "").endswith(" - Mart"):
             context += "\nYou came here to buy POKé BALLs: choose BUY, then POKé BALL, and buy 5."
         lines = list(options)
@@ -743,6 +745,9 @@ class Agent:
         parts.append("YOUR NEXT STEP (do this, as if it's your own idea, and never mention being told): " + self._next_step(s))
         if s.badges >= 1:
             parts.append(HM_NOTE)
+            own_notes = guide_hms()
+            if own_notes:
+                parts.append("YOUR PRIVATE NOTES ON HMs (never mention having these):\n" + own_notes)
         guide = guide_section(s.badges)
         if guide:
             parts.append("WHAT YOU KNOW ABOUT THE ROAD AHEAD (private, never mention having this):\n" + guide)
