@@ -22,14 +22,15 @@ from .memory import Memory
 from .menus import Menu, MenuReader, forget_choice, new_move_power
 from .naming import MAX_CHARS, NamingScreen, clean_name
 from .chat import ChatListener
+from .feed import action_line, event_line
 from .highlights import Highlights
-from .hints import (BACK_TO_CENTER, HM_NOTE, HM_TEACHING, TRAIN_LIMIT, arrived, guide_hms, guide_section, hint_for, is_training,
+from .hints import (BACK_TO_CENTER, HM_NOTE, HM_TEACHING, TRAIN_LIMIT, arrived, backup_target, guide_hms, guide_section, hint_for, is_training,
                     target_for, way_to_center)
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
 from .overworld import BLOCKED_EXIT, Overworld
-from .watchdog import SAMPLE_EVERY, WALK, Watchdog, escape_keys, escape_kind, fingerprint
+from .watchdog import PUSH_DECISIONS, SAMPLE_EVERY, WALK, StoryWatch, Watchdog, escape_keys, escape_kind, fingerprint
 
 KIND_ORDER = {"warp": 0, "exit": 1, "talk": 2, "train": 3, "explore": 4}
 BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported away",
@@ -123,6 +124,11 @@ class Agent:
         self._switch_tries = self._party_menu_tries = 0     # attempts at switching in the current battle
         self._battle_announced = False              # this battle has already been counted and announced
         self.watchdog = Watchdog()
+        self.story = StoryWatch()
+        self._training_now = False
+        self._pushing_on = 0                        # map decisions left where the code does the walking
+        self._push_to_people = False                # this time, try talking to people rather than new exits
+        self._journal_at_progress = 0               # notes after this were written while she was getting nowhere
         self._stuck_log = Path(cfg.brain.memory_file).resolve().parent / "logs" / "stuck.jsonl"
         self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
         self._center_turns = 0                      # decisions spent at a Pokémon Center trying to heal
@@ -171,7 +177,7 @@ class Agent:
         print(f"Overlay: http://127.0.0.1:{self.cfg.overlay.port}  Subtitles: http://127.0.0.1:{self.cfg.overlay.port}/subtitles")
         self.memory.bump("sessions")
         self.memory.save()
-        self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
+        self.overlay.update(goal=self._public_goal(), mood=self.memory.mood)
         self.news.start()
         if self.chat:
             self.chat.start()
@@ -259,6 +265,7 @@ class Agent:
                 print(f"[agent] {e}")
                 self._wait_for_brain()
                 self.watchdog.reset()
+                self.story.reset(time.time())
             except Exception as e:  # noqa: BLE001 - keep the stream alive
                 print(f"[agent] error: {e!r}; retrying in 2s")
                 time.sleep(2)
@@ -458,6 +465,7 @@ class Agent:
 
     def _event(self, text: str) -> None:
         print(f"[event] {text}")
+        self.overlay.feed(event_line(text))
         self.highlights.event(text)
         self.overlay.log(text)
         self.history.append(text)
@@ -626,6 +634,7 @@ class Agent:
         if strongest is not None and (forced or self.watchdog.level or not self._catch_nudge(info)):
             self._activity = labels[strongest][:120]                    # the math is done, so no need to stop and think
             print(f"[battle] {labels[strongest]}")
+            self.overlay.feed(action_line(labels[strongest]))
             self.history.append(f"In battle: {labels[strongest]}")
             return strongest
         self._wait_for_voice()
@@ -937,6 +946,10 @@ class Agent:
         self._actions_since_discovery = 0
         self._decisions_on_goal = 0
 
+    def _public_goal(self) -> str:
+        """Her goal for the on-stream panel, unless it gives away the guide or isn't fit to show."""
+        return "" if NOT_FOR_STREAM.search(self.memory.goal) else self.memory.goal
+
     def _set_goal(self, goal: str) -> None:
         """Her choice, unless it's an idea she just had to abandon. A really new goal gets a fresh chance."""
         goal = goal[:200]
@@ -945,7 +958,7 @@ class Agent:
         if not _same_idea(goal, self.memory.goal):
             self._decisions_on_goal = 0
         self.memory.goal = goal
-        self.overlay.update(goal=goal)
+        self.overlay.update(goal=self._public_goal())
 
     def _give_up_on_goal(self) -> None:
         """A goal that's gone nowhere for a while goes away, with the notes feeding it, so one idea can't take over."""
@@ -974,6 +987,7 @@ class Agent:
         self.memory.bump("decisions")
         self.overlay.update(thought=d.thought, action=action_label)
         self.overlay.log(f"▶ {action_label}")
+        self.overlay.feed(action_line(action_label))
         # Most decision lines are just "here's what I'm doing", so she usually keeps these to herself.
         if d.say and not self.narrator.is_speaking() and random.random() < SPEAK_DECISION_CHANCE:
             self._speak(d.say)
@@ -1000,7 +1014,7 @@ class Agent:
             self.memory.add_journal(r["journal"])
         if len(self.memory.journal) > JOURNAL_LIMIT:
             self.memory.journal = self.brain.condense(self.memory.journal)
-        self.overlay.update(goal=self.memory.goal, mood=self.memory.mood)
+        self.overlay.update(goal=self._public_goal(), mood=self.memory.mood)
         self.memory.save()
 
     @staticmethod
@@ -1070,7 +1084,8 @@ class Agent:
     def _follow_route(self, options: list, s: GameState) -> list:
         """Where a route is known, the exit or door for her next step is the one she takes. [] if there isn't one."""
         step = self._next_step(s)
-        if step == BACK_TO_CENTER:                      # anywhere in the game: retrace what she remembers
+        self._training_now = is_training(step)
+        if step == BACK_TO_CENTER:                     # anywhere in the game: retrace what she remembers
             way_back = way_to_center(s.map_name, self.memory.links, self.memory.places)
             door = [o for o in options if o.key == way_back]
             if door:
@@ -1086,11 +1101,37 @@ class Agent:
                 return []
             fewest = min(self.pick_counts[o.key] for o in people)
             return [o for o in people if self.pick_counts[o.key] == fewest]
-        want = target_for(step, s.map_name)
-        if not want:
+        for want in (target_for(step, s.map_name), backup_target(step, s.map_name)):
+            found = [o for o in options if want and ((o.kind == "exit" and o.label.startswith(f"Leave this area by the {want} side"))
+                                                     or (o.kind == "warp" and want in o.dest))]
+            if found:
+                return found
+        return []
+
+    def _check_story_progress(self, s: GameState) -> None:
+        """Busy isn't the same as getting somewhere: if she's gone a long time without either, the code takes the walking."""
+        now = time.time()
+        level = self.story.observe(s.badges, len(self.memory.places), s.key_items, len(s.party), self._training_now, now)
+        if self.story.last_progress == now:
+            self._journal_at_progress = len(self.memory.journal)
+        if not level:
+            return
+        print(f"[watchdog] no new area or story progress for {(now - self.story.last_progress) / 60:.0f} minutes (attempt {level})")
+        if level == 1:
+            self._record_stuck("overworld", None, "no_story_progress")
+        self.memory.journal = self.memory.journal[:self._journal_at_progress]       # what she "learned" while lost is what kept her lost
+        self._clear_stale_habits("overworld", 2)
+        self._pushing_on = PUSH_DECISIONS
+        self._push_to_people = level % 2 == 0
+        self.memory.save()
+
+    def _push_on(self, options: list) -> list:
+        """The code picks: somewhere she's been least, doors she's never used first. Every other attempt, people instead."""
+        kinds = ("talk", "warp") if self._push_to_people else ("warp", "exit", "explore")
+        choices = [o for o in options if o.kind in kinds and self.memory.links.get(o.key) != BLOCKED_EXIT]
+        if not choices:
             return []
-        return [o for o in options if (o.kind == "exit" and o.label.startswith(f"Leave this area by the {want} side"))
-                or (o.kind == "warp" and want in o.dest)]
+        return [min(choices, key=lambda o: (self.pick_counts[o.key], o.key in self.memory.links, o.distance))]
 
     def _no_turning_back(self, options: list) -> list:
         """Just arrived somewhere? She has to give it a go before heading straight back the way she came."""
@@ -1158,6 +1199,7 @@ class Agent:
             self.overlay.log(f"📍 {s.map_name}")
         self.overlay.update(location=s.map_name, badges=s.badges, money=s.money)
         self._maybe_reflect(s)
+        self._check_story_progress(s)
 
         self.world.show_destinations = True
         options, _grid = self.world.build_options(s)
@@ -1178,6 +1220,9 @@ class Agent:
         if self._lead_out_of_attacks(s):                # no business looking for fights
             options = [o for o in options if o.kind != "train"] or options
         route = self._follow_route(options, s)
+        if not route and self._pushing_on > 0:
+            route = self._push_on(options)
+            self._pushing_on -= 1
         options = route or self._prefer_untried(self._no_turning_back(options))
 
         lines = []
@@ -1198,6 +1243,7 @@ class Agent:
             self._think_seconds = 0.0
             self._activity = opt.label[:120]
             print(f"[route] {opt.label}")
+            self.overlay.feed(action_line(opt.label))
         else:
             decision = self.brain.decide(self._context, lines)
             opt = options[decision.choice]

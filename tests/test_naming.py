@@ -669,6 +669,34 @@ def test_unsuitable_lines_are_not_spoken(tmp_path):
     assert len(said) == 1
 
 
+def test_after_losing_a_battle_she_is_sent_back_toward_pewter():
+    from pokeplay import hints as h
+
+    for step in (h.THROUGH_FOREST, h.BROCK):
+        assert h.target_for(step, "Viridian City") == "north"
+        assert h.target_for(step, "Route 1") == "north"
+        assert h.target_for(step, "Pallet Town") == "north"
+        assert h.target_for(step, "Route 22") == "east"
+        assert h.target_for(step, "Route 2 - Viridian Forest - South Entrance") == "Viridian Forest"
+        assert h.target_for(step, "Viridian City - Pokémon Center - 1F") == "Viridian City"     # out of the Center first
+        assert h.backup_target(step, "Route 2") == "Viridian Forest - South Entrance"
+    assert h.backup_target(h.TO_VIRIDIAN, "Route 2") == ""
+    assert h.target_for(h.BROCK, "Pewter City") == "Pewter City - Gym"
+
+
+def test_south_half_of_route_2_uses_the_forest_door(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay import hints as h
+
+    agent, _ = _named_agent(tmp_path)
+    agent._next_step = lambda s: h.THROUGH_FOREST
+    door = NS(key="door", kind="warp", label="Go through", dest="Route 2 - Viridian Forest - South Entrance")
+    grass = NS(key="grass", kind="train", label="Grass", dest="")
+    north = NS(key="north", kind="exit", label="Leave this area by the north side (leads to Pewter City)", dest="")
+    assert agent._follow_route([grass, door], NS(map_name="Route 2")) == [door]             # the north exit is out of reach
+    assert agent._follow_route([grass, north], NS(map_name="Route 2")) == [north]           # past the forest, go north
+
+
 def test_gate_building_does_not_count_as_the_forest():
     from pokeplay import hints as h
 
@@ -1210,6 +1238,86 @@ def test_wild_creatures_can_still_be_caught(tmp_path):
     agent.menus.choose = lambda menu, i: menu.all_options()[i]
     agent._menu_turn(Menu("bag", "Your Bag is open on the POKé BALLS pocket.", ["POKé BALL", "CANCEL"]))
     assert "POKé BALL" in seen[0]
+
+
+def test_feed_describes_what_she_really_did():
+    from pokeplay.feed import action_line, event_line
+
+    assert action_line("Use VINE WHIP (Grass type, 8 PP left, direct damage, normal damage, THE STRONGEST CHOICE)") == "Used VINE WHIP (strongest move)"
+    assert action_line("Use GROWL (Normal type, 24 PP left, status move, does no direct damage)") == "Used GROWL"
+    assert action_line("Leave this area by the north side (leads to Viridian City)") == "Heading north to Viridian City"
+    assert action_line("Leave this area by the west side (you haven't been that way yet)") == "Heading west"
+    assert action_line("Go through the doorway/stairs 9 steps up (leads to Route 2)") == "Going to Route 2"
+    assert action_line("Walk around in the tall grass right where you're standing") == "Training in the tall grass"
+    assert action_line('The game asks: "Do you want to name it?" -> YES') == ""                 # menus stay off the feed
+    assert event_line("A wild creature jumped out! It's called RATTATA, level 3.") == "Wild encounter: RATTATA (Lv 3)"
+    assert event_line("Someone challenged you to a battle! It's called WEEDLE, level 9.") == "Trainer battle: WEEDLE (Lv 9)"
+    assert event_line("The battle is over: you won. Zorblax grew to level 14!") == "Battle over: you won. Zorblax grew to level 14!"
+    assert event_line("You arrived somewhere new: Route 22.") == "New area: Route 22"
+    assert event_line("You noticed: GUST was super effective.") == ""
+
+
+def test_overlay_feed_keeps_the_latest_and_skips_repeats():
+    from pokeplay.overlay.server import OverlayState
+
+    ov = OverlayState()
+    for line in ("a", "a", "", "b", "c", "d", "e"):
+        ov.feed(line)
+    assert [item["text"] for item in json.loads(ov.snapshot())["feed"]] == ["b", "c", "d", "e"]
+
+
+def test_goal_panel_never_gives_away_the_guide(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.goal = "Reach Viridian City"
+    assert agent._public_goal() == "Reach Viridian City"
+    agent.memory.goal = "Follow the walkthrough to the gym"
+    assert agent._public_goal() == ""
+
+
+def test_story_watch_notices_busy_but_going_nowhere():
+    from pokeplay.watchdog import StoryWatch
+
+    minute = 60.0
+    watch = StoryWatch()
+    assert watch.observe(0, 10, ["TEACHY TV"], 3, False, 0.0) == 0
+    assert watch.observe(0, 10, ["TEACHY TV"], 3, False, 19 * minute) == 0
+    assert watch.observe(0, 10, ["TEACHY TV"], 3, False, 20 * minute) == 1
+    assert watch.observe(0, 10, ["TEACHY TV"], 3, False, 25 * minute) == 0     # one attempt per step
+    assert watch.observe(0, 10, ["TEACHY TV"], 3, False, 30 * minute) == 2
+
+    assert watch.observe(0, 11, ["TEACHY TV"], 3, False, 31 * minute) == 0 and watch.level == 0     # a new area counts
+    assert watch.observe(0, 11, ["TEACHY TV"], 2, False, 40 * minute) == 0     # losing a team member isn't a setback for this
+    assert watch.observe(0, 11, ["TEACHY TV"], 3, False, 52 * minute) == 1     # and getting them back isn't progress
+    assert watch.observe(0, 11, ["TEACHY TV", "MAP"], 3, False, 53 * minute) == 0                   # a new key item counts
+    assert watch.observe(1, 11, ["TEACHY TV", "MAP"], 3, False, 54 * minute) == 0                   # so does a badge
+
+    training = StoryWatch()
+    assert training.observe(0, 10, [], 1, True, 0.0) == 0
+    assert training.observe(0, 10, [], 1, True, 60 * minute) == 0              # training has its own time limit
+
+
+def test_when_she_gets_nowhere_the_code_takes_the_walking(tmp_path):
+    import time
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.journal = ["Useful note.", "The gym has the map."]
+    agent._journal_at_progress = 1
+    agent.memory.goal = "Get the map from the gym"
+    agent.pick_counts["old"] = 5
+    agent.story.observe = lambda *a: 1
+    agent.story.last_progress = time.time() - 1200
+    agent._check_story_progress(NS(badges=0, key_items=[], party=[]))
+    assert agent.memory.journal == ["Useful note."] and agent.memory.goal == "" and agent._pushing_on > 0
+
+    def opt(key, kind):
+        return NS(key=key, kind=kind, distance=1, label=key, dest="")
+    used, fresh, grass, person = opt("used", "exit"), opt("fresh", "warp"), opt("grass", "train"), opt("person", "talk")
+    agent.memory.links = {"used": "Route 1"}
+    agent.pick_counts["fresh"] = 0
+    assert agent._push_on([grass, person, used, fresh]) == [fresh]
+    agent._push_to_people = True
+    assert agent._push_on([grass, used, person]) == [person]
 
 
 def test_going_round_in_a_loop_counts_as_stuck():

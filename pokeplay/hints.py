@@ -102,6 +102,9 @@ RETURN_STEPS = {badges: f"Your team is badly hurt. Leave {route} by the {back} s
 
 
 # For each step: where she is -> the exit direction or door name that moves her forward.
+TO_PEWTER = {"Pallet Town": "north", "Route 1": "north", "Viridian City": "north", "Route 22": "east",   # losing a battle sends her back
+             "Route 2 - Viridian Forest - South Entrance": "Viridian Forest", "Viridian Forest": "North Entrance",
+             "Route 2 - Viridian Forest - North Entrance": "Route 2", "Route 2": "north"}
 ROUTE = {
     TO_VIRIDIAN: {"Pallet Town": "north", "Route 1": "north"},
     GET_PARCEL: {"Viridian City": "Viridian City - Mart"},
@@ -109,9 +112,8 @@ ROUTE = {
     TO_FOREST: {"Pallet Town": "north", "Route 1": "north", "Viridian City": "north", "Route 22": "east",
                 "Route 2": "Viridian Forest - South Entrance",
                 "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"},
-    THROUGH_FOREST: {"Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
-                     "Route 2": "north"},
-    BROCK: {"Route 2": "north", "Route 3": "west", "Pewter City": "Pewter City - Gym"},
+    THROUGH_FOREST: TO_PEWTER,
+    BROCK: {**TO_PEWTER, "Route 3": "west", "Pewter City": "Pewter City - Gym"},
     TO_ROUTE_3: {"Pewter City": "east", "Route 3": "east", "Route 4": "Mt Moon"},
     MISTY: {"Route 4": "east", "Cerulean City": "Cerulean City - Gym"},
 }
@@ -120,6 +122,8 @@ for _badges, (_leader, _city, _level, _way, _route, _back) in TRAINING.items():
     ROUTE[RETURN_STEPS[_badges]] = {_route: _back}
 # Done training at a gym with no ROUTE entry: the way back to town. Kept apart because a ROUTE entry would also walk her
 # out of every building on the way, like the ship or the Gym itself.
+# Route 2 is cut in two by the forest: from the south half the north exit can't be reached, so she takes the forest door.
+BACKUP_TARGET = {step: {"Route 2": "Viridian Forest - South Entrance"} for step in (THROUGH_FOREST, BROCK)}
 AFTER_TRAINING = {BY_BADGES[badges]: {TRAINING[badges][4]: TRAINING[badges][5]} for badges in (2, 3, 4)}
 
 
@@ -186,6 +190,11 @@ def guide_section(badges: int, path: Path = GUIDE_PATH) -> str:
     body = text[start + len(heading) + 4:]
     end = body.find("\n#")
     return (body if end == -1 else body[:end]).strip()[:GUIDE_MAX_CHARS]
+
+
+def backup_target(step: str, place: str) -> str:
+    """Where to go instead if the usual exit for this step can't be reached from where she's standing, or ""."""
+    return BACKUP_TARGET.get(step, {}).get(place, "")
 
 
 def way_to_center(place: str, links: dict[str, str], places: dict[str, str]) -> str:

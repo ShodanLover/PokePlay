@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -18,7 +19,7 @@ class OverlayState:
         self._lock = threading.Lock()
         self._data: dict = {"say": "", "thought": "", "goal": "", "mood": "", "stats": {}, "location": "", "badges": 0,
                             "money": 0, "party": [], "log": [], "mode": "", "action": "",
-                            "subtitle": "", "streamer": ""}
+                            "subtitle": "", "streamer": "", "feed": []}
 
     def update(self, **kwargs) -> None:
         with self._lock:
@@ -27,6 +28,12 @@ class OverlayState:
     def log(self, line: str, keep: int = 8) -> None:
         with self._lock:
             self._data["log"] = (self._data["log"] + [line])[-keep:]
+
+    def feed(self, line: str, keep: int = 4) -> None:
+        """The newest things she's really done, for viewers."""
+        with self._lock:
+            if line and (not self._data["feed"] or self._data["feed"][-1]["text"] != line):
+                self._data["feed"] = (self._data["feed"] + [{"time": time.strftime("%H:%M"), "text": line}])[-keep:]
 
     def snapshot(self) -> bytes:
         with self._lock:

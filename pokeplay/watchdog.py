@@ -13,7 +13,11 @@ ACT_AGAIN_AFTER = 30.0      # seconds between escapes if the last one didn't wor
 MIN_SAMPLES = 10            # looks at the game needed first, so one slow AI answer can't look like being stuck
 REMEMBER_SECONDS = 300.0    # a state she hasn't been in for this long counts as new again
 
-WALK = "WALK"               # a few random steps
+STORY_PATIENCE = 20 * 60.0  # seconds with no new area, badge, key item or team member before the code takes over the walking
+STORY_ACT_AGAIN = 10 * 60.0 # seconds between further attempts if that didn't help
+PUSH_DECISIONS = 20         # map decisions the code makes itself each time
+
+WALK = "WALK"              # a few random steps
 # What to press for each kind of situation. Each failed attempt moves on to the next row, then starts over.
 ESCAPES = {
     "battle": [[], ["B", "B"], ["A", "A"], ["B", "B", "A"]],     # the first row just stops asking the AI
@@ -47,6 +51,39 @@ def escape_kind(mode: str, has_menu: bool, must_send_out: bool) -> str:
 def escape_keys(kind: str, level: int) -> list[str]:
     rows = ESCAPES[kind]
     return rows[(level - 1) % len(rows)]
+
+
+class StoryWatch:
+    """The slower kind of stuck: she's busy and winning battles, but getting nowhere in the game."""
+
+    def __init__(self) -> None:
+        self.level = 0
+        self.last_progress = 0.0
+        self._best: tuple[int, int, int] | None = None
+        self._key_items: set[str] = set()
+
+    def reset(self, now: float) -> None:
+        self.last_progress = now
+        self.level = 0
+
+    def observe(self, badges: int, places: int, key_items: list[str], team_size: int, busy: bool, now: float) -> int:
+        """Take one look at her progress. Returns the attempt number to carry out now, or 0 for nothing to do."""
+        current = (badges, places, team_size)
+        new_items = set(key_items) - self._key_items
+        self._key_items |= new_items
+        better = self._best is None or bool(new_items) or any(c > b for c, b in zip(current, self._best))
+        self._best = current if self._best is None else tuple(max(c, b) for c, b in zip(current, self._best))
+        if better or busy:                  # busy: time-limited training, which is meant to stay in one place
+            self.reset(now)
+            return 0
+        stalled = now - self.last_progress
+        if stalled < STORY_PATIENCE:
+            return 0
+        reached = 1 + int((stalled - STORY_PATIENCE) // STORY_ACT_AGAIN)
+        if reached <= self.level:
+            return 0
+        self.level = reached
+        return reached
 
 
 class Watchdog:

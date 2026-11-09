@@ -52,9 +52,12 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Stuck detector (`watchdog.py`):** the catch-all behind those rules. Only a game state she hasn't been in lately counts as
   progress, so loops count as stuck. After 60s (150s on the map) code stops asking the AI and tries escalating button escapes
   every 30s. The first attempt saves the situation to `logs/stuck.jsonl`: read that to fix real causes.
+- **Going nowhere (`StoryWatch` in `watchdog.py`):** the slower check. 20 minutes without a new area, badge, key item or team
+  member (time-limited gym training doesn't count) drops the notes and goal from that stretch, then the code picks her next 20
+  map moves itself, unused doors and exits first; every 10 more minutes it tries again, alternating with talking to people.
 - **Comments stay on the game (owner's request):** she's given the latest on-screen text, and a line sharing no real word with
   what's happening isn't spoken (`_about_the_game`); headlines and the running joke are exempt.
-- **How much she talks (owner's request):** at most one comment every 15s, and she thinks out loud after 25s of quiet
+- **How much she talks (owner's request):** a comment can come 6s after her last line ends, and she thinks out loud after 10s of quiet
   (`[commentary]` in `config.toml`). Viewer replies skip that wait, open with "Hey {username}," (added in code) and are unhinged,
   still with no flirting with viewers, sexual content, threats or insults about who they are.
 - **Tone update (owner's request):** very unhinged, swearing allowed, and flirty. The flirting stays non-sexual and aimed
@@ -105,6 +108,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 
 - Settings: Stream → Twitch (Connect Account). Output → Simple, **NVIDIA NVENC H.264**, 4500 Kbps.
   Video → 1920x1080, 30 FPS. Advanced → **Automatically Reconnect** on.
+- The top of the right column is a status panel: badges, won-lost record, place, her goal and a feed of what she's really done
+  (`feed.py`; never her reasoning or the guide). Below it:
 - The right column shows Twitch chat (`twitch_channel` in `config.toml`; read-only in the page, it must never reach
   the AI) above her team. Subtitles are their own centered box at the bottom. mGBA must stay at 6x, unmaximized:
   OBS crops off its menu bar. A `Backdrop` image source (`pokeplay/overlay/background.png`, original

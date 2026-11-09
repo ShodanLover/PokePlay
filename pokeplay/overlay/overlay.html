@@ -21,6 +21,17 @@
   .wrap { position: absolute; top: 12px; right: 12px; width: 444px; height: 714px; overflow: hidden;
     display: flex; flex-direction: column; gap: 12px; }
   .card { background: var(--bg); border: 1px solid var(--edge); border-radius: 14px; padding: 12px 18px; box-sizing: border-box; }
+  .status { flex: none; padding: 10px 18px; }
+  .status-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; font-size: 14px; }
+  .status-top .tag { color: var(--accent); font-weight: 700; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; }
+  .status-top .nums { color: var(--muted); white-space: nowrap; }
+  .status-top .nums b { color: var(--text); }
+  .where { margin-top: 4px; font-size: 15px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .goal { margin-top: 2px; font-size: 17px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #feed { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--edge); height: 84px; overflow: hidden; }
+  #feed .row { display: flex; gap: 8px; height: 21px; font-size: 15px; line-height: 21px; }
+  #feed .time { flex: none; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #feed .text { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; }
   .label { font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
   #chat { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
@@ -42,6 +53,15 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="card status">
+    <div class="status-top">
+      <span class="tag">AI experiment</span>
+      <span class="nums"><b id="badges">0/8</b> badges · <b id="record">0–0</b> won–lost</span>
+    </div>
+    <div class="where" id="where">&nbsp;</div>
+    <div class="goal" id="goal">Getting started</div>
+    <div id="feed"></div>
+  </div>
   <div class="card chat">
     <div class="label">Twitch chat</div>
     <div id="chat"><div class="msg note" id="chat-note">Chat will appear here</div></div>
@@ -55,7 +75,7 @@
   // Twitch chat, read-only and anonymous. It only draws messages here: chat never reaches the AI.
   const MAX_MESSAGES = 40;
   const chatBox = document.getElementById("chat"), team = document.getElementById("team");
-  let chatChannel = "", chatSocket = null, shownTeam = null;
+  let chatChannel = "", chatSocket = null, shownTeam = null, shownFeed = null;
 
   function parseIrc(raw) {
     const tags = {};
@@ -138,9 +158,28 @@
     }));
   }
 
+  function renderStatus(s) {
+    const stats = s.stats || {};
+    document.getElementById("badges").textContent = (s.badges || 0) + "/8";
+    document.getElementById("record").textContent = (stats.won || 0) + "–" + (stats.lost || 0);
+    document.getElementById("where").textContent = s.location || " ";
+    document.getElementById("goal").textContent = s.goal ? "Goal: " + s.goal : "Working out what to do next";
+    const feedJson = JSON.stringify(s.feed || []);
+    if (feedJson === shownFeed) return;
+    shownFeed = feedJson;
+    document.getElementById("feed").replaceChildren(...(s.feed || []).map(item => {
+      const row = document.createElement("div"); row.className = "row";
+      const time = document.createElement("span"); time.className = "time"; time.textContent = item.time;
+      const text = document.createElement("span"); text.className = "text"; text.textContent = item.text;
+      row.append(time, text);
+      return row;
+    }));
+  }
+
   async function refresh() {
     try {
       const s = await (await fetch("/state.json", { cache: "no-store" })).json();
+      renderStatus(s);
       const partyJson = JSON.stringify(s.party || []);
       if (partyJson !== shownTeam) { shownTeam = partyJson; renderTeam(s.party || []); }
       if (s.twitch_channel && s.twitch_channel !== chatChannel) {
