@@ -50,6 +50,13 @@ MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leav
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
 
 
+def _same_mon(before: Mon, after: Mon) -> bool:
+    """Whether two party slots hold the same Pokémon. An unnicknamed one's name changes when it evolves."""
+    if before.nickname == after.nickname:
+        return True
+    return before.nickname.upper() == before.species_name.upper() and after.nickname.upper() == after.species_name.upper()
+
+
 def _ideas(text: str) -> set[str]:
     return {w.removesuffix("'s") for w in _words(text) if len(w) >= 4 and w not in COMMON_WORDS}
 
@@ -333,6 +340,8 @@ class Agent:
             after = self.game.party()
             lines = []
             for b, a in zip(self._party_before_battle, after):
+                if not _same_mon(b, a):                 # she switched Pokémon during the battle, so the order changed
+                    continue
                 if a.species != b.species and a.level >= b.level:
                     lines.append(f"{b.nickname} changed form and is now a {a.species_name}!")
                 elif a.level > b.level:
@@ -365,7 +374,7 @@ class Agent:
             return False
         self._last_chat_reply = time.time()
         print(f"[chat] answering {message[0]}: {message[1]}")
-        line = self.brain.reply_to_chat(*message, self._context or "You've only just started playing.")
+        line = self.brain.reply_to_chat(*message, self._activity)
         if not line:
             print("[chat] (no usable reply)")
             return False

@@ -988,6 +988,26 @@ def test_toaster_talk_is_not_spoken(tmp_path):
     assert agent._speak("My brain is a broken toaster.") is False
 
 
+def test_chat_replies_always_say_the_name():
+    from pokeplay.brain import Brain
+
+    b = Brain("http://x", "m")
+    b._chat = lambda *a, **k: '{"say": "Nobody asked, but thanks."}'
+    assert b.reply_to_chat("bigelephantjumps", "hello there", "walking") == "bigelephantjumps, Nobody asked, but thanks."
+
+
+def test_switching_pokemon_is_not_an_evolution():
+    from types import SimpleNamespace as NS
+    from pokeplay.agent import _same_mon
+
+    pikachu = NS(nickname="Pikachu", species_name="BULBASAUR")
+    weedle = NS(nickname="WEEDLE", species_name="WEEDLE")
+    kakuna = NS(nickname="KAKUNA", species_name="KAKUNA")
+    assert not _same_mon(weedle, pikachu)                   # swapped places
+    assert _same_mon(weedle, kakuna)                        # really evolved
+    assert _same_mon(pikachu, NS(nickname="Pikachu", species_name="IVYSAUR"))
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 
