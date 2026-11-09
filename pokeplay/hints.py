@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 # The rest of the game, in our own words. For each badge count: (a place she hasn't reached yet, what to do), in order,
 # then BY_BADGES once she's been everywhere on that list.
 LATER_STEPS = {
@@ -38,6 +40,14 @@ BY_BADGES = [
     "Go back to Viridian City, go into the Gym that used to be closed, and beat the leader, Giovanni.",
     "Go through Victory Road to the Indigo Plateau, heal, and beat the Elite Four and the Champion.",
 ]
+HEAL = "Your team is badly hurt. Go into this town's Pokémon Center and talk to the person at the counter to heal them for free."
+CENTER_CITIES = ("Viridian City", "Pewter City", "Cerulean City", "Lavender Town", "Vermilion City", "Celadon City",
+                 "Fuchsia City", "Cinnabar Island", "Saffron City")
+GUIDE_PATH = Path(__file__).resolve().parent.parent / "firered_walkthrough.md"
+GUIDE_HEADINGS = ("Pallet Town to Pewter City", "Mt. Moon to Vermilion City", "Lavender Town to Fuchsia City",
+                  "Saffron City to Viridian City", "Indigo Plateau")
+GUIDE_FOR_BADGES = (0, 1, 1, 2, 2, 3, 3, 3, 4)      # which part of the owner's route notes applies at each badge count
+GUIDE_MAX_CHARS = 900                               # keeps her prompt short, which keeps her fast
 BUY_BALLS = "You're out of POKé BALLs. Go into this town's Mart, talk to the clerk, choose BUY, and buy 5 POKé BALLs."
 MART_CITIES = ("Viridian City", "Pewter City", "Cerulean City", "Lavender Town", "Vermilion City", "Fuchsia City",
                "Cinnabar Island", "Saffron City")
@@ -77,6 +87,10 @@ DESTINATIONS = {GET_PARCEL: "Viridian City - Mart", PARCEL: "Pallet Town - Profe
 
 def target_for(step: str, place: str) -> str:
     """The exit direction or door name she should take now, or "" to leave it up to her."""
+    if step == HEAL:
+        if arrived(step, place):
+            return ""
+        return f"{place} - Pokémon Center - 1F" if place in CENTER_CITIES else place.split(" - ")[0]
     if step == BUY_BALLS:
         if arrived(step, place):
             return ""
@@ -91,18 +105,37 @@ def target_for(step: str, place: str) -> str:
 
 def arrived(step: str, place: str) -> bool:
     """She's at the place this step needs, so the job now is talking or fighting, not leaving."""
+    if step == HEAL:
+        return place.endswith("Pokémon Center - 1F")
     if step == BUY_BALLS:
         return place.endswith(" - Mart")
     return DESTINATIONS.get(step) == place
 
 
+def guide_section(badges: int, path: Path = GUIDE_PATH) -> str:
+    """The part of the owner's route notes for this stage of the game, or "" if the file isn't there."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return ""
+    heading = GUIDE_HEADINGS[GUIDE_FOR_BADGES[max(0, min(badges, len(GUIDE_FOR_BADGES) - 1))]]
+    start = text.find(f"### {heading}")
+    if start == -1:
+        return ""
+    body = text[start + len(heading) + 4:]
+    end = body.find("\n#")
+    return (body if end == -1 else body[:end]).strip()[:GUIDE_MAX_CHARS]
+
+
 def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str], delivered: bool,
-             want_balls: bool = False, place: str = "") -> str:
+             want_balls: bool = False, place: str = "", needs_healing: bool = False) -> str:
     def been(name: str) -> bool:
         return any(name in visited for visited in places)
 
     if not has_team:
         return NO_TEAM
+    if needs_healing and place.split(" - ")[0] in CENTER_CITIES:    # only while she's in a town that has a Center
+        return HEAL
     if any("PARCEL" in item.upper() for item in key_items):
         return PARCEL
     if want_balls and place.split(" - ")[0] in MART_CITIES:     # only while she's in a town that has a Mart

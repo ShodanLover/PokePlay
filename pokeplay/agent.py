@@ -19,7 +19,7 @@ from .game import BattleInfo, Game, GameState, Mon
 from .memory import Memory
 from .menus import Menu, MenuReader
 from .naming import MAX_CHARS, NamingScreen, clean_name
-from .hints import arrived, hint_for, target_for
+from .hints import arrived, guide_section, hint_for, target_for
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
@@ -91,6 +91,7 @@ class Agent:
         self._recent_picks: collections.deque[str] = collections.deque(maxlen=6)
         self._worn_out: dict[str, int] = {}         # options set aside: decisions left until they come back
         self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
+        self._center_turns = 0                      # decisions spent at a Pokémon Center trying to heal
         self._came_from = ""                        # the place she was in before this one
         self._decisions_here = 0
         self._snapshot: dict | None = None          # what she last knew about, to spot what changed
@@ -634,6 +635,9 @@ class Agent:
             parts.append("YOUR TEAM IS BADLY HURT: go to the nearest Pokémon Center and talk to the person at the "
                          "counter, or go home and talk to Mom, before doing anything else.")
         parts.append("YOUR NEXT STEP (do this, as if it's your own idea, and never mention being told): " + self._next_step(s))
+        guide = guide_section(s.badges)
+        if guide:
+            parts.append("WHAT YOU KNOW ABOUT THE ROAD AHEAD (private, never mention having this):\n" + guide)
         if self._actions_since_discovery >= 8:
             parts.append(f"You've done {self._actions_since_discovery} things in a row without discovering "
                          "anything new.")
@@ -752,8 +756,14 @@ class Agent:
         want_balls = delivered and not s.balls and s.money >= 400 and len(s.party) < 6 and self._mart_turns < 30
         if want_balls and s.map_name.endswith(" - Mart"):
             self._mart_turns += 1               # a limit, so she can't get stuck in a shop she can't work out
+        hurt = self._team_badly_hurt(s)
+        if not hurt:
+            self._center_turns = 0
+        needs_healing = hurt and self._center_turns < 30
+        if needs_healing and s.map_name.endswith("Pokémon Center - 1F"):
+            self._center_turns += 1             # a limit, so she can't get stuck at the counter
         return hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered,
-                        want_balls=want_balls, place=s.map_name)
+                        want_balls=want_balls, place=s.map_name, needs_healing=needs_healing)
 
     def _follow_route(self, options: list, s: GameState) -> list:
         """Where a route is known, the exit or door for her next step is the one she takes. [] if there isn't one."""

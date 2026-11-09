@@ -8,11 +8,11 @@
      A box centered at the bottom of the screen, below the game and clear of her avatar's corner. */
   :root { --bg: rgba(14, 18, 28, 0.92); --text: #f2f4f8; --accent: #ffcb3d; }
   html, body { margin: 0; background: transparent; overflow: hidden; }
-  .box { position: absolute; left: 304px; right: 304px; bottom: 8px; height: 90px; box-sizing: border-box;
+  .box { position: absolute; left: 304px; right: 304px; bottom: 8px; height: 98px; box-sizing: border-box;
     padding: 0 28px; display: flex; align-items: center; justify-content: center; text-align: center;
     background: var(--bg); border: 2px solid var(--accent); border-radius: 14px;
     font-family: "Segoe UI", system-ui, sans-serif; color: var(--text); }
-  .line { max-height: 84px; overflow: hidden; font-size: 34px; font-weight: 600; line-height: 1.25;
+  .line { max-height: 92px; overflow: hidden; font-size: 46px; font-weight: 600; line-height: 1.25;
     opacity: 0; transition: opacity .2s ease; }
   .line.on { opacity: 1; }
 </style>
@@ -20,7 +20,7 @@
 <body>
 <div class="box"><div class="line" id="line"></div></div>
 <script>
-  const MAX_FONT = 34, MIN_FONT = 22, MAX_HEIGHT = 84;
+  const MAX_FONT = 46, MIN_FONT = 26, MAX_HEIGHT = 92;
   const line = document.getElementById("line");
   let current = "";
 

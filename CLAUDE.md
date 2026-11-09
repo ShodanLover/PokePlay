@@ -36,8 +36,8 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   No "I'm so chaotic!", no asterisk actions, no exclamation spam, no forced catchphrases (the catchphrase
   is no longer spoken). She doesn't greet or address viewers: she can't see them. "Ugh" is stripped from her speech, and lines with "chaos"/"chaotic" aren't
   spoken. Style rules are in `brain.py` (`DEFAULT_STYLE`), and the `speaking_style` config overrides them.
-- **Walkthrough:** `LATER_STEPS` and `BY_BADGES` in `hints.py` are written in our own words. Don't paste third-party
-  guides into the project. She only tries to catch species she doesn't have, and buys Poké Balls when out and in a Mart town.
+- **Walkthrough:** `LATER_STEPS` and `BY_BADGES` in `hints.py` are written in our own words. The owner's own notes in
+  `firered_walkthrough.md` (not in git) are read at runtime, one section at a time, by `guide_section`. She only tries to catch species she doesn't have, and buys Poké Balls when out and in a Mart town.
 - **Guided play (owner changed this on 2026-11-08):** she was too lost to be watchable, so `hints.py` tells her the
   next story step on every map decision for the whole game, and every door shows its real name. Up to Misty, `ROUTE` in
   `hints.py` also picks the exit or door for her. She still does battles and talking. This replaces the first-timer
@@ -98,7 +98,7 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   3. **Info Panel**: Browser, `http://127.0.0.1:8765`, 1920x1080
   4. **Game**: Window Capture of mGBA, Capture Method "Windows 10 (1903 and up)" if it's black,
      Scale Filtering → Point. Set mGBA to View → Frame size → 6x and place the game 1440x960 at (12, 12), so
-     pixels stay sharp. The right column is x 1464-1908, ending at y 726; the subtitle box is x 304-1616, y 982-1072;
+     pixels stay sharp. The right column is x 1464-1908, ending at y 726; the subtitle box is x 304-1616, y 974-1072;
      the avatar sits in the bottom-right corner. **Nothing on stream may overlap.**
 - The browser sources only show content while the bot is running (its overlay server is on port 8765).
   Right-click → Refresh if one is blank.

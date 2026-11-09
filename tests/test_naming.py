@@ -639,7 +639,7 @@ def test_she_takes_the_door_for_her_next_step(tmp_path):
     mart = NS(kind="warp", label="door", dest="Viridian City - Mart", key="b")
     north = NS(kind="exit", label="Leave this area by the north side (x)", dest="", key="c")
     agent.memory.places["3.1"] = "Viridian City"
-    state = NS(badges=0, party=[1], key_items=[], map_name="Viridian City", balls=[], money=0)
+    state = NS(badges=0, party=[NS(hp=10, max_hp=10)], key_items=[], map_name="Viridian City", balls=[], money=0)
     assert agent._follow_route([house, mart, north], state) == [mart]
     assert agent._follow_route([house, north], state) == []                             # door not reachable: her call
     state.badges = 2
@@ -652,7 +652,8 @@ def test_once_at_the_destination_she_talks_instead_of_leaving(tmp_path):
     agent, _ = _named_agent(tmp_path)
     door = NS(kind="warp", label="door", dest="Pallet Town", key="out")
     oak, aide = NS(kind="talk", label="t", dest="", key="oak"), NS(kind="talk", label="t", dest="", key="aide")
-    state = NS(badges=0, party=[1], key_items=["OAK'S PARCEL"], map_name="Pallet Town - Professor Oak's Lab", balls=[], money=0)
+    state = NS(badges=0, party=[NS(hp=10, max_hp=10)], key_items=["OAK'S PARCEL"],
+               map_name="Pallet Town - Professor Oak's Lab", balls=[], money=0)
     assert agent._follow_route([door, oak, aide], state) == [oak, aide]
     agent.pick_counts["aide"] = 2
     assert agent._follow_route([door, oak, aide], state) == [oak]
@@ -798,6 +799,27 @@ def test_buying_balls_only_in_towns_with_a_mart():
     assert h.target_for(h.BUY_BALLS, "Pewter City") == "Pewter City - Mart"
     assert h.target_for(h.BUY_BALLS, "Pewter City - Mart") == ""
     assert h.arrived(h.BUY_BALLS, "Pewter City - Mart")
+
+
+def test_healing_comes_first_in_towns(tmp_path):
+    from pokeplay import hints as h
+
+    assert h.hint_for(0, True, [], ["Viridian City"], True, place="Pewter City", needs_healing=True) == h.HEAL
+    assert h.hint_for(0, True, [], ["Viridian Forest"], True, place="Viridian Forest", needs_healing=True) != h.HEAL
+    assert h.target_for(h.HEAL, "Pewter City") == "Pewter City - Pokémon Center - 1F"
+    assert h.target_for(h.HEAL, "Pewter City - Pokémon Center - 1F") == ""
+    assert h.arrived(h.HEAL, "Pewter City - Pokémon Center - 1F")
+
+
+def test_guide_section_follows_her_progress(tmp_path):
+    from pokeplay.hints import guide_section
+
+    guide = tmp_path / "guide.md"
+    guide.write_text("# Notes\n### Pallet Town to Pewter City\nGo north.\n### Mt. Moon to Vermilion City\nGo east.\n",
+                     encoding="utf-8")
+    assert guide_section(0, guide) == "Go north."
+    assert guide_section(2, guide) == "Go east."
+    assert guide_section(0, tmp_path / "missing.md") == ""
 
 
 def test_impossible_actions_stop_being_offered(tmp_path):
