@@ -298,6 +298,10 @@ class Game:
             return "bag"
         return "other"
 
+    def team_menu_in_battle(self) -> bool:
+        """The team screen is the battle one, whatever her own record of being in a battle says."""
+        return self.emu.u8(A.gPartyMenu_menuType) & 0x0F == A.PARTY_MENU_IN_BATTLE
+
     def battle_input(self) -> str:
         """What the battle is waiting for: 'action', 'move', 'target' or ''."""
         func = self.emu.u32(A.gBattlerControllerFuncs) & ~1

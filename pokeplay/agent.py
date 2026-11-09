@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 
 from . import addresses as A
-from .battle import BattlePilot, Choice, hp_bar
+from .battle import OVER_TIME_NOTE, BattlePilot, Choice, hp_bar
 from .brain import COMMON_WORDS, GUESSWORK, NOT_FOR_STREAM, OVERUSED_WORDS, RANDOM_SUBJECTS, Brain, BrainOffline, _words, clean_spoken
 from .config import Config
 from .emulator import Emulator
@@ -23,16 +23,20 @@ from .menus import Menu, MenuReader, forget_choice, new_move_power
 from .naming import MAX_CHARS, NamingScreen, clean_name
 from .chat import ChatListener
 from .highlights import Highlights
-from .hints import HM_NOTE, HM_TEACHING, arrived, guide_hms, guide_section, hint_for, target_for
+from .hints import (BACK_TO_CENTER, HM_NOTE, HM_TEACHING, TRAIN_LIMIT, arrived, guide_hms, guide_section, hint_for, is_training,
+                    target_for, way_to_center)
 from .narrator import Narrator
 from .news import Headlines
 from .overlay.server import OverlayState, start_overlay
 from .overworld import BLOCKED_EXIT, Overworld
+from .watchdog import SAMPLE_EVERY, WALK, Watchdog, escape_keys, escape_kind, fingerprint
 
 KIND_ORDER = {"warp": 0, "exit": 1, "talk": 2, "train": 3, "explore": 4}
 BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported away",
                    6: "the wild Pokémon fled", 7: "caught it"}
 MAX_TALK_OPTIONS = 5
+NO_CATCHING = "A trainer's creature can never be caught: POKé BALLs only work on wild creatures, so don't use one here."
+BALL_ITEM = re.compile(r"\bBALL\b", re.I)
 REFLECT_EVERY = 12          # decisions between reflections
 JOURNAL_LIMIT = 40          # condense the journal when it gets this long
 GAME_QUESTIONS = {"yesno", "multichoice", "forget_move", "quantity"}   # must be answered; every other menu she opened
@@ -110,8 +114,13 @@ class Agent:
         self._last_badges: int | None = None
         self._last_move: tuple[str, int, int] = ("", -1, 0)   # last battle choice, opponent's HP then, times in a row
         self._switch_tries = self._party_menu_tries = 0     # attempts at switching in the current battle
+        self._battle_announced = False              # this battle has already been counted and announced
+        self.watchdog = Watchdog()
+        self._stuck_log = Path(cfg.brain.memory_file).resolve().parent / "logs" / "stuck.jsonl"
         self._mart_turns = 0                        # decisions spent in a shop trying to buy Poké Balls
         self._center_turns = 0                      # decisions spent at a Pokémon Center trying to heal
+        self._train_turns = 0                       # decisions spent training for the next gym
+        self._train_badges = 0                      # the badge count that training was for
         self._came_from = ""                        # the place she was in before this one
         self._decisions_here = 0
         self._snapshot: dict | None = None          # what she last knew about, to spot what changed
@@ -228,6 +237,7 @@ class Agent:
             except BrainOffline as e:
                 print(f"[agent] {e}")
                 self._wait_for_brain()
+                self.watchdog.reset()
             except Exception as e:  # noqa: BLE001 - keep the stream alive
                 print(f"[agent] error: {e!r}; retrying in 2s")
                 time.sleep(2)
@@ -245,6 +255,8 @@ class Agent:
             self._prev_mode = mode
 
         menu = self.menus.read() if mode != "naming" else None
+        if self._stepped_in(mode, menu):
+            return
         if menu is not None:
             self._menu_turn(menu)
         elif mode == "battle":
@@ -283,6 +295,66 @@ class Agent:
         if mode != "naming":
             self._named_this_screen = False
         self._periodic(mode)
+
+    # ------------------------------------------------------------------ getting unstuck
+    def _stepped_in(self, mode: str, menu: Menu | None) -> bool:
+        """True if nothing has really happened for too long and the code just took over for a moment."""
+        now = time.time()
+        if mode == "naming" or now - self.watchdog.last_sample < SAMPLE_EVERY:
+            return False
+        self.watchdog.last_sample = now
+        try:
+            level = self.watchdog.observe(fingerprint(self.game, mode, menu), mode, now)
+        except Exception:  # noqa: BLE001 - if the game can't be read right now, this is no time to go pressing buttons
+            return False
+        if not level:
+            return False
+        kind = escape_kind(mode, menu is not None, self._must_send_out())
+        keys = escape_keys(kind, level)
+        print(f"[watchdog] nothing new for {self.watchdog.stuck_for(now):.0f}s ({kind}, attempt {level}): {keys or 'code plays on'}")
+        if level == 1:
+            self._record_stuck(mode, menu, kind)
+        self._clear_stale_habits(kind, level)
+        for key in keys:
+            if key == WALK:
+                for _ in range(6):
+                    self.emu.press(random.choice(("UP", "DOWN", "LEFT", "RIGHT")), hold=10, wait=6)
+            else:
+                self.emu.press(key, hold=2, wait=20)
+        return bool(keys)
+
+    def _clear_stale_habits(self, kind: str, level: int) -> None:
+        """Whatever she was repeating came from these, so they go."""
+        self._leaving_menus = False
+        self._menu_picks.clear()
+        self._party_menu_tries = 0
+        if kind == "battle":
+            self.pilot.reset()
+        elif kind == "overworld":
+            self.history.clear()
+            self.pick_counts.clear()
+            self._recent_picks.clear()
+            self._worn_out.clear()
+            self._failed_options.clear()
+            if level >= 2 and self.memory.goal:
+                self._give_up_on_goal()
+
+    def _record_stuck(self, mode: str, menu: Menu | None, kind: str) -> None:
+        """Keep the exact situation, so the real cause can be fixed afterwards."""
+        try:
+            s = self.game.state()
+            info = self.game.battle_info() if mode in ("battle", "party_menu") else None
+            entry = {"time": time.strftime("%Y-%m-%d %H:%M:%S"), "mode": mode, "kind": kind, "place": s.map_name,
+                     "position": [s.x, s.y], "message": s.message, "doing": self._activity, "goal": self.memory.goal,
+                     "battle_waiting_for": self.game.battle_input() if mode == "battle" else "",
+                     "menu": {"kind": menu.kind, "title": menu.title, "options": menu.all_options()} if menu else None,
+                     "team": [m.summary() + " | " + ", ".join(f"{mv.name} {mv.pp}pp" for mv in m.moves) for m in s.party],
+                     "opponent": info.enemy.summary() if info and info.enemy else None, "recent": list(self.history)[-12:]}
+            self._stuck_log.parent.mkdir(parents=True, exist_ok=True)
+            with self._stuck_log.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        except Exception as e:  # noqa: BLE001 - the record is a nice extra: never let it get in the way
+            print(f"[watchdog] couldn't save the record: {e!r}")
 
     def _periodic(self, mode: str) -> None:
         now = time.time()
@@ -323,13 +395,15 @@ class Agent:
             self._finish_conversation()
         if new == "battle" and not self._in_battle:
             self._in_battle = True
-            self.memory.bump("battles")
+            if not self._battle_announced:
+                self.memory.bump("battles")
             self.pilot.reset()
             self._party_before_battle = self.game.party()
             self.emu.wait_frames(30)   # let the battle data fill in
             info = self.game.battle_info()
             foe = self.game.decode_mon(self.emu.read(A.gEnemyParty, 100)) or info.enemy
-            if foe:
+            if foe and not self._battle_announced:      # screen changes mid-battle land here too: announce it once
+                self._battle_announced = True
                 who = "Someone challenged you to a battle" if info.is_trainer else "A wild creature jumped out"
                 self._event(f"{who}! It's called {foe.species_name}, level {foe.level}.")
         elif self._in_battle and new not in ("battle", "party_menu"):
@@ -389,11 +463,11 @@ class Agent:
         last = 0.0
         silence = self.cfg.commentary.max_silence_seconds
         while True:
+            if self._answer_chat():                 # a viewer comes first, however busy the game is
+                continue
             try:
                 batch = [self._events.get(timeout=2)]
             except queue.Empty:
-                if self._answer_chat():
-                    continue
                 quiet_for = time.time() - self.narrator.last_spoke
                 if silence and quiet_for >= silence and not self.narrator.is_speaking():
                     for _ in range(3):              # a line can be dropped as a repeat: try again
@@ -438,7 +512,7 @@ class Agent:
         self.brain.remember_said(text)
         self._last_said = time.time()
         self.highlights.spoken(text, self.cfg.brain.obsession, was_news=self.brain.took_headline(text))
-        self.narrator.say(text)
+        (self.narrator.say_first if always_fresh else self.narrator.say)(text)
         return True
 
     # ------------------------------------------------------------------ battle choices (hers)
@@ -448,7 +522,7 @@ class Agent:
                 [m.name for m in (me.moves if me else [])]
         lessons = self.memory.relevant_lessons(words)
         parts = [
-            "YOU ARE IN A BATTLE" + (" against another trainer (you can't run away)." if info.is_trainer else
+            "YOU ARE IN A BATTLE" + (f" against another trainer (you can't run away). {NO_CATCHING}" if info.is_trainer else
                                      " with a wild creature."),
             f"Your Pokémon: {me.summary() if me else '?'}",
             f"Opponent: {foe.species_name} level {foe.level}, its HP bar is {hp_bar(foe)}"
@@ -493,15 +567,22 @@ class Agent:
         if strongest is None and self._switch_tries < MAX_SWITCH_TRIES and self._attacker_slot(skip_active=True) is not None:
             strongest = next((i for i, label in enumerate(labels) if label.startswith("Switch to")), None)
             self._switch_tries += 1
+        if strongest is None:                   # no attack, can't run, nobody to swap to: the code plays it out
+            strongest = self._last_resort_move(labels)
+        moves = [i for i, label in enumerate(labels) if label.startswith("Use ")]
+        if self.watchdog.level >= 2 and moves:  # the usual answer isn't getting anywhere, so try anything else she has
+            strongest = random.choice(moves)
         forced = strongest is not None and (labels[strongest] == "Try to run away" or labels[strongest].startswith("Switch to"))
-        if strongest is not None and (forced or not self._catch_nudge(info)):
+        if strongest is not None and (forced or self.watchdog.level or not self._catch_nudge(info)):
             self._activity = labels[strongest][:120]                    # the math is done, so no need to stop and think
             print(f"[battle] {labels[strongest]}")
             self.history.append(f"In battle: {labels[strongest]}")
             return strongest
         self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
-        shown = self._usable_battle_labels(labels)
+        shown = self._usable_battle_labels(labels, info.is_trainer)
+        if not self._someone_to_switch_to():    # swapping to nobody just reopens the team screen, over and over
+            shown = [i for i in shown if not labels[i].startswith("Switch to")] or shown
         if info.enemy and info.enemy.status:    # it already has a status problem, so more of those would be wasted
             shown = [i for i in shown if "does no direct damage" not in labels[i]] or shown
         shown = [i for i in shown if not self._move_not_working(labels[i], info)] or shown
@@ -511,6 +592,21 @@ class Agent:
         self._apply_decision(d, labels[chosen])
         self.history.append(f"In battle: {labels[chosen]}")
         return chosen
+
+    @staticmethod
+    def _last_resort_move(labels: list[str]) -> int | None:
+        """Damage over time first, then least PP: once every move is empty the game makes her Struggle, so the battle ends."""
+        def priority(i: int) -> tuple[bool, int]:
+            found = re.search(r"(\d+) PP left", labels[i])
+            return OVER_TIME_NOTE not in labels[i], int(found.group(1)) if found else 0
+
+        return min((i for i, label in enumerate(labels) if label.startswith(("Use ", "Fight (no PP"))), key=priority, default=None)
+
+    def _someone_to_switch_to(self) -> bool:
+        try:
+            return any(slot and mon.hp > 0 for slot, mon in enumerate(self.game.party()))
+        except Exception:  # noqa: BLE001 - never let this get in the way of a battle
+            return True
 
     def _attacker_slot(self, skip_active: bool) -> int | None:
         """The first team member who can still fight and has an attack with PP left."""
@@ -523,10 +619,19 @@ class Agent:
                 return slot
         return None
 
+    def _must_send_out(self) -> bool:
+        """Her Pokémon in battle has fainted, and the game won't leave the team screen until someone else goes in."""
+        try:
+            party = self.game.party()
+            return bool(party) and party[0].hp <= 0 and self.game.team_menu_in_battle()
+        except Exception:  # noqa: BLE001 - never let this get in the way of a battle
+            return False
+
     def _battle_party_menu(self, menu: Menu) -> None:
         """Switching in battle is mechanics, so the code does it: pick someone who can attack, then confirm."""
+        forced = self._must_send_out()
         self._party_menu_tries += 1
-        if self._party_menu_tries > MAX_SWITCH_TRIES * 2:       # it isn't working, so back out and fight on
+        if self._party_menu_tries > MAX_SWITCH_TRIES * 2 and not forced:    # it isn't working, so back out and fight on
             print("[battle] team menu keeps failing; backing out")
             self.emu.press("B", hold=2, wait=20)
             return
@@ -535,6 +640,8 @@ class Agent:
             slot = next((i for i, o in enumerate(options) if "SHIFT" in o.upper() or "SWITCH" in o.upper()), 0)
         else:
             slot = self._attacker_slot(skip_active=True)
+            if slot is None and forced:                         # no attacks left is still better than nobody
+                slot = next((i for i, mon in enumerate(self.game.party()) if i and mon.hp > 0), None)
             if slot is None:                                    # nobody healthy to send: never pick a fainted one
                 self.emu.press("B", hold=2, wait=20)
                 return
@@ -551,14 +658,14 @@ class Agent:
         same = self._last_move[0] == name and self._last_move[1] == hp
         self._last_move = (name, hp, self._last_move[2] + 1 if same else 1)
 
-    def _usable_battle_labels(self, labels: list[str]) -> list[int]:
+    def _usable_battle_labels(self, labels: list[str], is_trainer: bool = False) -> list[int]:
         """Positions of the battle choices worth offering: an empty bag has nothing to use."""
         everything = list(range(len(labels)))
         try:
             s = self.game.state()
         except Exception:  # noqa: BLE001 - never let this get in the way of a battle
             return everything
-        if s.items or s.balls:
+        if s.items or (s.balls and not is_trainer):             # balls are no use against a trainer
             return everything
         return [i for i in everything if "your Bag" not in labels[i]] or everything
 
@@ -591,7 +698,7 @@ class Agent:
             print(f"[moves] {menu.all_options()[slot]}")
             self.menus.choose(menu, slot)
             return
-        if self._in_battle and menu.kind in ("party_choose", "party_action"):
+        if menu.kind in ("party_choose", "party_action") and (self._in_battle or self._must_send_out()):
             self._battle_party_menu(menu)
             return
         browsing = menu.kind not in GAME_QUESTIONS and not self._in_battle
@@ -619,10 +726,15 @@ class Agent:
                 n = self._menu_picks[(menu.title[:60], option)]
                 if n:
                     lines[i] += f" [you've already picked this {n} time{'s' if n > 1 else ''} just now]"
+        offered = list(range(len(options)))
+        if menu.kind == "bag" and self._trainer_battle():       # the game would only refuse it and waste time
+            context += f"\n{NO_CATCHING}"
+            offered = [i for i in offered if not BALL_ITEM.search(options[i])] or offered
         self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
-        d = self.brain.decide(context, lines)
-        label = options[d.choice]
+        d = self.brain.decide(context, [lines[i] for i in offered])
+        chosen = offered[d.choice]
+        label = options[chosen]
         self._apply_decision(d, f"{menu.title[:60]} -> {label}")
         if browsing:
             self._menu_picks[(menu.title[:60], label)] += 1
@@ -634,10 +746,16 @@ class Agent:
                 self._menu_cooldown = MENU_COOLDOWN
                 self.emu.press("B", hold=2, wait=20)
                 return
-        done = self.menus.choose(menu, d.choice)
+        done = self.menus.choose(menu, chosen)
         self.history.append(f"Menu ({menu.title[:70]}): chose {done}")
         if menu.kind == "yesno" and "?" in msg:
             self.memory.add_journal(f'When asked "{msg[:100]}", you answered {label}.')
+
+    def _trainer_battle(self) -> bool:
+        try:
+            return bool(self.game.battle_info().is_trainer)
+        except Exception:  # noqa: BLE001 - never let this get in the way of a battle
+            return False
 
     def _absorb_battle_lessons(self) -> None:
         while self.pilot.lessons:
@@ -883,13 +1001,26 @@ class Agent:
         needs_healing = hurt and self._center_turns < 30
         if needs_healing and s.map_name.endswith("Pokémon Center - 1F"):
             self._center_turns += 1             # a limit, so she can't get stuck at the counter
+        if s.badges != self._train_badges:      # each gym gets its own training time
+            self._train_badges, self._train_turns = s.badges, 0
         return hint_for(s.badges, bool(s.party), s.key_items, list(self.memory.places.values()), delivered,
                         want_balls=want_balls, place=s.map_name, needs_healing=needs_healing,
-                        heal_anywhere=out_of_attacks and needs_healing)
+                        heal_anywhere=out_of_attacks and needs_healing,
+                        strongest=max((m.level for m in s.party), default=0), can_train=self._train_turns < TRAIN_LIMIT)
 
     def _follow_route(self, options: list, s: GameState) -> list:
         """Where a route is known, the exit or door for her next step is the one she takes. [] if there isn't one."""
         step = self._next_step(s)
+        if step == BACK_TO_CENTER:                      # anywhere in the game: retrace what she remembers
+            way_back = way_to_center(s.map_name, self.memory.links, self.memory.places)
+            door = [o for o in options if o.key == way_back]
+            if door:
+                return door
+        if is_training(step):                           # counted here because this runs once per decision
+            self._train_turns += 1
+            grass = [o for o in options if o.kind == "train"]
+            if grass:
+                return grass
         if arrived(step, s.map_name):                   # in the right place: stay and talk to people, least-tried first
             people = [o for o in options if o.kind == "talk"]
             if not people:
@@ -949,6 +1080,7 @@ class Agent:
         self._menu_picks.clear()
         self._leaving_menus = False
         self._switch_tries = self._party_menu_tries = 0     # back on the map, so the next battle starts fresh
+        self._battle_announced = False
         s = self.game.state()
         self._changes = self._note_changes(s)
         if self._last_badges is not None and s.badges > self._last_badges:
@@ -984,6 +1116,8 @@ class Agent:
         if hide_menu:
             options = [o for o in options if o.kind != "menu"] or options
         options = self._drop_worn_out(options)
+        if self._lead_out_of_attacks(s):                # no business looking for fights
+            options = [o for o in options if o.kind != "train"] or options
         route = self._follow_route(options, s)
         options = route or self._prefer_untried(self._no_turning_back(options))
 

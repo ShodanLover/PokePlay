@@ -455,7 +455,7 @@ def test_lines_that_waited_too_long_are_not_said():
 
     said = []
     n = Narrator("none", on_speak=said.append)
-    n._q.put((time.time() - 60, "That level up a minute ago!"))
+    n._q.put((time.time() - 60, "That level up a minute ago!", False))
     n.wait_until_quiet(1)
     time.sleep(0.2)
     assert said == []
@@ -639,7 +639,7 @@ def test_she_takes_the_door_for_her_next_step(tmp_path):
     mart = NS(kind="warp", label="door", dest="Viridian City - Mart", key="b")
     north = NS(kind="exit", label="Leave this area by the north side (x)", dest="", key="c")
     agent.memory.places["3.1"] = "Viridian City"
-    state = NS(badges=0, party=[NS(hp=10, max_hp=10)], key_items=[], map_name="Viridian City", balls=[], money=0)
+    state = NS(badges=0, party=[NS(hp=10, max_hp=10, level=5)], key_items=[], map_name="Viridian City", balls=[], money=0)
     assert agent._follow_route([house, mart, north], state) == [mart]
     assert agent._follow_route([house, north], state) == []                             # door not reachable: her call
     state.badges = 2
@@ -652,7 +652,7 @@ def test_once_at_the_destination_she_talks_instead_of_leaving(tmp_path):
     agent, _ = _named_agent(tmp_path)
     door = NS(kind="warp", label="door", dest="Pallet Town", key="out")
     oak, aide = NS(kind="talk", label="t", dest="", key="oak"), NS(kind="talk", label="t", dest="", key="aide")
-    state = NS(badges=0, party=[NS(hp=10, max_hp=10)], key_items=["OAK'S PARCEL"],
+    state = NS(badges=0, party=[NS(hp=10, max_hp=10, level=5)], key_items=["OAK'S PARCEL"],
                map_name="Pallet Town - Professor Oak's Lab", balls=[], money=0)
     assert agent._follow_route([door, oak, aide], state) == [oak, aide]
     agent.pick_counts["aide"] = 2
@@ -888,7 +888,7 @@ def test_chat_never_reaches_her_decisions_and_is_rate_limited(tmp_path):
     agent, _ = _named_agent(tmp_path)
     assert agent.chat is None                               # off unless turned on
     said = []
-    agent.narrator.say = said.append
+    agent.narrator.say_first = said.append
     agent.chat = NS(take=lambda: ("sam", "hello"))
     agent.brain.reply_to_chat = lambda user, message, context: "Sam, you absolute menace."
     assert agent._answer_chat() is True and said == ["Sam, you absolute menace."]
@@ -936,17 +936,84 @@ def test_with_no_attacks_left_she_runs_from_wild_fights(tmp_path):
     assert agent._choose_battle_action(_battle_info("asleep"), labels, []) == 1
 
 
-def test_status_moves_are_hidden_when_the_foe_already_has_one(tmp_path):
+def test_a_sleeping_foe_never_leaves_her_with_only_bag_and_switch(tmp_path):
     from types import SimpleNamespace as NS
-    from pokeplay.brain import Decision
 
     agent, _ = _named_agent(tmp_path)
-    seen = []
-    agent.brain.decide = lambda context, lines: seen.append(lines) or Decision("t", "", 0)
+    agent.brain.decide = lambda context, lines: 1 / 0               # must not need the model
     agent.game.state = lambda: NS(items=[("Potion", 1)], balls=[], party=[NS(species=1)])
     labels = ["Use SLEEP POWDER (does no direct damage)", "Open your Bag (items, Poké Balls)", "Switch to a different Pokémon"]
-    assert agent._choose_battle_action(_battle_info("asleep", is_trainer=True), labels, []) == 1
-    assert seen == [labels[1:]]
+    assert agent._choose_battle_action(_battle_info("asleep", is_trainer=True), labels, []) == 0
+
+
+def test_weak_team_trains_next_to_the_gym():
+    from pokeplay import hints as h
+
+    def hint(badges, places, place, level, can_train=True, **kw):
+        return h.hint_for(badges, True, [], places, True, place=place, strongest=level, can_train=can_train, **kw)
+
+    # Too weak in the gym's city or on the grass next door: train. Strong enough, or out of training time: the gym.
+    assert hint(0, ["Pewter City"], "Pewter City", 9) == h.TRAIN_STEPS[0]
+    assert hint(0, ["Pewter City"], "Pewter City - Gym", 9) == h.TRAIN_STEPS[0]
+    assert hint(0, ["Pewter City"], "Route 3", 9) == h.TRAIN_STEPS[0]
+    assert hint(0, ["Pewter City"], "Pewter City", 12) == h.BROCK
+    assert hint(0, ["Pewter City"], "Pewter City", 9, can_train=False) == h.BROCK
+    assert hint(1, ["Cerulean City"], "Cerulean City", 15) == h.TRAIN_STEPS[1]
+
+    # Never interrupts travel, and never happens before she's finished that stretch of the story.
+    assert hint(0, ["Pewter City"], "Route 2", 9) == h.BROCK
+    assert hint(1, ["Pewter City"], "Pewter City", 9) == h.TO_ROUTE_3
+    assert "Sea Cottage" in hint(2, [], "Vermilion City", 9)
+
+    # Hurt on the grass: back to town. In town: the Center comes first.
+    assert hint(0, ["Pewter City"], "Route 3", 9, needs_healing=True) == h.RETURN_STEPS[0]
+    assert hint(0, ["Pewter City"], "Pewter City", 9, needs_healing=True) == h.HEAL
+
+    # Later gyms only get a warning, and the level isn't known in the older calls.
+    done = [marker for marker, _ in h.LATER_STEPS[5]]
+    assert hint(5, done, "Saffron City", 30).startswith(h.BY_BADGES[5] + " ")
+    assert hint(5, done, "Saffron City", 36) == h.BY_BADGES[5]
+    assert hint(0, ["Pewter City"], "Pewter City", 0) == h.BROCK
+
+
+def test_training_routes_there_and_back():
+    from pokeplay import hints as h
+
+    assert h.target_for(h.TRAIN_STEPS[0], "Pewter City") == "east"
+    assert h.target_for(h.TRAIN_STEPS[0], "Route 3") == ""                         # on the grass, so she stays
+    assert h.target_for(h.TRAIN_STEPS[0], "Pewter City - Gym") == "Pewter City"
+    assert h.target_for(h.RETURN_STEPS[0], "Route 3") == "west"
+    assert h.target_for(h.BROCK, "Route 3") == "west"                              # finished, so back to the Gym
+    assert h.target_for(h.MISTY, "Route 4") == "east"
+    for badges in (2, 3, 4):
+        route, back = h.TRAINING[badges][4], h.TRAINING[badges][5]
+        assert h.target_for(h.BY_BADGES[badges], route) == back
+        assert h.target_for(h.BY_BADGES[badges], f"{h.TRAINING[badges][1]} - Gym") == ""   # she isn't pulled out of the Gym
+
+
+def test_training_picks_the_grass_and_has_a_limit(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay import hints as h
+
+    agent, _ = _named_agent(tmp_path)
+    agent.memory.places = {"1.1": "Pewter City"}
+    mon = NS(hp=30, max_hp=30, level=9, moves=[NS(power=35, pp=20)], nickname="A")
+    state = NS(badges=0, party=[mon], key_items=[], balls=[("POKé BALL", 3)], money=500, map_name="Route 3")
+    grass = NS(kind="train", label="grass", dest="", key="grass:1.2")
+    west = NS(kind="exit", label="Leave this area by the west side (x)", dest="", key="w")
+
+    assert agent._follow_route([west, grass], state) == [grass]
+    assert agent._train_turns == 1
+    agent._next_step(state)                                                     # the prompt asks too, without counting
+    assert agent._train_turns == 1
+
+    agent._train_turns = h.TRAIN_LIMIT                                          # time's up: on to the gym
+    assert agent._next_step(state) == h.BROCK
+    assert agent._follow_route([west, grass], state) == [west]
+
+    state.badges = 1                                                            # a new gym gets its own time
+    agent._next_step(state)
+    assert agent._train_turns == 0
 
 
 def test_out_of_attacks_sends_her_back_to_heal(tmp_path):
@@ -964,7 +1031,7 @@ def test_out_of_attacks_sends_her_back_to_heal(tmp_path):
 def test_a_chat_reply_is_never_dropped_as_a_repeat(tmp_path):
     agent, _ = _named_agent(tmp_path)
     said = []
-    agent.narrator.say = said.append
+    agent.narrator.say = agent.narrator.say_first = said.append
     assert agent._speak("That fence looks freshly painted, Sam.")
     assert agent._speak("That fence looks freshly painted, Sam.", always_fresh=True)
     assert len(said) == 2
@@ -1037,6 +1104,243 @@ def test_battle_team_menus_are_handled_by_code(tmp_path):
     assert chosen == [2, 1] and agent.prompts == []
 
 
+def test_a_viewer_reply_is_never_dropped_by_the_voice(monkeypatch, capsys):
+    import time
+    from pokeplay import narrator as voice
+
+    waiting = voice.Narrator(engine="none")
+    monkeypatch.setattr(waiting, "_q", voice.queue.Queue())         # nothing is taking lines off this one
+    waiting.say("first comment")
+    waiting.say_first("Sam, hello.")
+    waiting.say("second comment")
+    assert [item[1] for item in waiting._q.queue] == ["Sam, hello.", "second comment"]
+
+    speaking = voice.Narrator(engine="none")
+    long_ago = time.time() - 9999
+    speaking._q.put((long_ago, "old comment", False))
+    speaking._q.put((long_ago, "Sam, hello.", True))
+    time.sleep(0.5)
+    out = capsys.readouterr().out
+    assert "(skipped, too late) old comment" in out and "[voice] Sam, hello." in out
+
+
+def test_moves_are_labeled_by_what_kind_they_are():
+    from types import SimpleNamespace as NS
+    from pokeplay.battle import rate_moves
+
+    def move(name, power):
+        return NS(name=name, pp=5, power=power, type=1, accuracy=100)
+
+    moves = [move("VINE WHIP", 35), move("GROWL", 0), move("LEECH SEED", 0), move("WRAP", 15)]
+    info = NS(player=NS(moves=moves, types=(1, 1)), enemy=NS(types=(2, 2)))
+    notes = rate_moves(NS(effectiveness=lambda move_type, types: 1.0), info)
+    assert "direct damage" in notes[0] and "THE STRONGEST CHOICE" in notes[0]
+    assert "status move" in notes[1] and "does no direct damage" in notes[1]
+    assert "damage over time" in notes[2] and "does no direct damage" not in notes[2]
+    assert "direct damage" in notes[3] and "plus damage over time" in notes[3]
+
+
+def test_last_resort_prefers_damage_over_time():
+    from pokeplay.agent import Agent
+
+    labels = ["Use SLEEP POWDER (Grass type, 1 PP left, status move, does no direct damage)",
+              "Use LEECH SEED (Grass type, 9 PP left, damage over time: nothing right away)"]
+    assert Agent._last_resort_move(labels) == 1
+
+
+def test_she_finds_a_center_from_anywhere_she_has_been():
+    from pokeplay.hints import way_to_center
+
+    places = {"3.1": "Route 9", "3.2": "Route 10", "1.5": "Rock Tunnel - 1F"}
+    links = {"3.2|edge:north": "Route 9", "3.2|door@1,1": "Rock Tunnel - 1F", "3.1|edge:west": "Cerulean City",
+             "1.5|door@2,2": "Route 10", "3.2|edge:east": "(blocked)"}
+    assert way_to_center("Route 10", links, places) == "3.2|edge:north"
+    assert way_to_center("Rock Tunnel - 1F", links, places) == "1.5|door@2,2"
+    assert way_to_center("Somewhere New", links, places) == ""
+
+
+def test_out_of_attacks_she_heads_for_the_center_not_the_grass(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay import hints as h
+
+    agent, _ = _named_agent(tmp_path)
+    agent._next_step = lambda s: h.BACK_TO_CENTER
+    agent.memory.places = {"3.1": "Route 9"}
+    agent.memory.links = {"3.1|edge:west": "Cerulean City"}
+    home, grass = NS(key="3.1|edge:west", kind="exit", label="Leave", dest=""), NS(key="grass:3.1", kind="train", label="Grass", dest="")
+    assert agent._follow_route([grass, home], NS(map_name="Route 9")) == [home]
+
+
+def test_no_poke_balls_in_a_trainer_battle(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay.brain import Decision
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    agent.game.battle_info = lambda: NS(is_trainer=True)
+    seen, chosen = [], []
+    agent.brain.decide = lambda context, lines: seen.append((context, lines)) or Decision("t", "", 0)
+    agent.menus.choose = lambda menu, i: chosen.append(i) or menu.all_options()[i]
+    agent._menu_turn(Menu("bag", "Your Bag is open on the POKé BALLS pocket.", ["POKé BALL", "GREAT BALL", "CANCEL"]))
+    assert "only work on wild" in seen[0][0]
+    assert not any("BALL" in line for line in seen[0][1]) and chosen == [2]     # still lands on the right entry
+
+    agent.game.state = lambda: NS(items=[], balls=[("POKé BALL", 3)], party=[])
+    labels = ["Use GROWL", "Open your Bag (items, Poké Balls)"]
+    assert agent._usable_battle_labels(labels, is_trainer=True) == [0]
+    assert agent._usable_battle_labels(labels, is_trainer=False) == [0, 1]
+
+
+def test_wild_creatures_can_still_be_caught(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay.brain import Decision
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    agent.game.battle_info = lambda: NS(is_trainer=False)
+    seen = []
+    agent.brain.decide = lambda context, lines: seen.append(lines) or Decision("t", "", 0)
+    agent.menus.choose = lambda menu, i: menu.all_options()[i]
+    agent._menu_turn(Menu("bag", "Your Bag is open on the POKé BALLS pocket.", ["POKé BALL", "CANCEL"]))
+    assert "POKé BALL" in seen[0]
+
+
+def test_going_round_in_a_loop_counts_as_stuck():
+    from pokeplay.watchdog import Watchdog
+
+    dog = Watchdog()
+    results = [dog.observe(("A",) if t % 4 else ("B",), "battle", float(t)) for t in range(0, 124, 2)]
+    assert results[:30] == [0] * 30                         # nothing for the first minute
+    assert [(t * 2, r) for t, r in enumerate(results) if r] == [(62, 1), (92, 2), (122, 3)]
+    assert dog.observe(("C",), "battle", 124.0) == 0 and dog.level == 0     # something new: all is well again
+
+
+def test_watchdog_leaves_normal_play_alone():
+    from pokeplay.watchdog import Watchdog
+
+    walking = Watchdog()
+    assert not any(walking.observe((t % 8,), "overworld", float(t * 2)) for t in range(60))     # pacing for 2 minutes is fine
+    assert any(walking.observe((t % 8,), "overworld", float(t * 2)) for t in range(60, 90))     # but not forever
+
+    progress = Watchdog()
+    assert not any(progress.observe((t,), "battle", float(t * 2)) for t in range(200))          # always something new
+
+    slow_ai = Watchdog()
+    assert slow_ai.observe(("A",), "battle", 0.0) == 0
+    assert slow_ai.observe(("A",), "battle", 90.0) == 0                                         # one slow answer isn't stuck
+
+
+def test_watchdog_picks_a_safe_escape():
+    from pokeplay.watchdog import ESCAPES, escape_keys, escape_kind
+
+    assert escape_kind("party_menu", True, True) == "send_out"
+    assert escape_kind("party_menu", True, False) == "menu"
+    assert escape_kind("battle", False, False) == "battle"
+    assert escape_kind("other", False, False) == "other"
+    assert not any("B" in row for row in ESCAPES["other"])          # B would cancel an evolution
+    assert escape_keys("battle", 1) == [] and escape_keys("battle", 5) == []    # goes round again
+
+
+def test_when_stuck_the_code_steps_in_and_keeps_a_record(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    mon = NS(species=1, level=16, hp=0, status="", moves=[NS(name="GROWL", pp=4)], summary=lambda: "Pikachu Lv16")
+    agent.game.state = lambda: NS(map_group=1, map_num=2, x=3, y=4, money=5, badges=0, party=[mon], items=[], balls=[],
+                                  key_items=[], message="Choose.", map_name="Viridian Forest")
+    agent.game.battle_info = lambda: NS(enemy=NS(species=10, hp=9, status="asleep", summary=lambda: "Caterpie"))
+    agent.game.party = lambda: [mon]
+    agent.game.team_menu_in_battle = lambda: True
+    menu = Menu("party_choose", "Choose a Pokémon.", ["Pikachu"])
+    agent.watchdog.observe = lambda state, mode, now: 1
+    agent.pressed.clear()
+    assert agent._stepped_in("party_menu", menu) is True
+    assert agent.pressed == ["B", "DOWN", "A", "A"]
+    assert "Caterpie" in agent._stuck_log.read_text(encoding="utf-8")
+
+
+def test_when_stuck_in_battle_the_ai_is_not_asked(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.brain.decide = lambda context, lines: 1 / 0
+    agent.game.party = _team
+    labels = ["Use TACKLE (Normal type, 9 PP left, THE STRONGEST CHOICE)", "Use GROWL (Normal type, 40 PP left, does no direct damage)",
+              "Open your Bag (items, Poké Balls)"]
+    agent._catch_nudge = lambda info: "catch it"
+    agent.watchdog.level = 1
+    assert agent._choose_battle_action(_battle_info(), labels, []) == 0
+    agent.watchdog.level = 2
+    assert agent._choose_battle_action(_battle_info(), labels, []) in (0, 1)
+
+
+def test_a_busy_game_cannot_drown_out_a_viewer(tmp_path):
+    import threading
+    import time
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.cfg.commentary.max_silence_seconds = 0
+    agent.narrator.say = lambda text: None
+    agent.brain.comment = lambda events, ctx: ""
+    messages, replied = [("sam", "hello")], []
+    agent.chat = NS(take=lambda: messages.pop() if messages else None)
+    agent.brain.reply_to_chat = lambda user, message, context: replied.append(user) or "Sam, you absolute menace."
+    for _ in range(50):
+        agent._queue_comment("Someone challenged you to a battle!")
+    threading.Thread(target=agent._commentary_worker, daemon=True).start()
+    time.sleep(1)
+    assert replied == ["sam"]
+
+
+def test_a_battle_is_announced_once_until_she_is_back_on_the_map(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.game = NS(party=lambda: [], decode_mon=lambda raw: None,
+                    battle_info=lambda: NS(is_trainer=True, enemy=NS(species_name="CATERPIE", level=10)))
+    agent.emu = NS(wait_frames=lambda frames: None, read=lambda address, size: b"", u8=lambda address: 0)
+    agent.pilot.reset = lambda: None
+    events = []
+    agent._event = events.append
+    agent._on_mode_change("other", "battle")
+    agent._in_battle = False                                        # what a screen change mid-battle does
+    agent._on_mode_change("other", "battle")
+    assert len(events) == 1 and agent.memory.stats["battles"] == 1
+
+
+def test_no_attacks_and_nobody_to_swap_to_plays_it_out(tmp_path):
+    from types import SimpleNamespace as NS
+
+    agent, _ = _named_agent(tmp_path)
+    agent.brain.decide = lambda context, lines: 1 / 0               # must not need the model
+    agent.game.party = lambda: [NS(hp=28, moves=[NS(power=0, pp=9), NS(power=35, pp=0)]), NS(hp=0, moves=[NS(power=15, pp=9)])]
+    labels = ["Use GROWL (Normal type, 40 PP left, does no direct damage)",
+              "Use LEECH SEED (Grass type, 9 PP left, does no direct damage)",
+              "Open your Bag (items, Poké Balls)", "Switch to a different Pokémon"]
+    assert not agent._someone_to_switch_to()
+    assert agent._choose_battle_action(_battle_info(is_trainer=True), labels, []) == 1
+    assert agent._last_resort_move(["Fight (no PP left on any move)", "Open your Bag (items, Poké Balls)"]) == 0
+
+
+def test_forced_send_out_uses_whoever_is_left(tmp_path):
+    from types import SimpleNamespace as NS
+    from pokeplay.menus import Menu
+
+    agent = _menu_agent(tmp_path)
+    agent._in_battle = False                                        # lost during the screen change into this menu
+    agent._leaving_menus = True                                     # and this made her press B forever
+    agent._party_menu_tries = 99
+    agent.game.team_menu_in_battle = lambda: True
+    agent.game.party = lambda: [NS(hp=0, moves=[NS(power=15, pp=32)]), NS(hp=0, moves=[NS(power=15, pp=35)]),
+                                NS(hp=22, moves=[NS(power=0, pp=2), NS(power=35, pp=0)])]
+    chosen = []
+    agent.menus.choose = lambda menu, slot: chosen.append(slot)
+    agent.pressed.clear()
+    agent._menu_turn(Menu("party_choose", "Choose a Pokémon.", ["A", "B", "C"]))
+    agent._menu_turn(Menu("party_action", "What to do?", ["SHIFT", "SUMMARY", "CANCEL"]))
+    assert chosen == [2, 0] and agent.pressed == [] and agent.prompts == []
+
+
 def test_switching_gives_up_instead_of_looping(tmp_path):
     from types import SimpleNamespace as NS
     from pokeplay.brain import Decision
@@ -1049,7 +1353,7 @@ def test_switching_gives_up_instead_of_looping(tmp_path):
     agent.brain.decide = lambda context, lines: agent.prompts.append(lines) or Decision("t", "", 0)
     labels = ["Use GROWL (does no direct damage)", "Switch to a different Pokémon"]
     picks = [agent._choose_battle_action(_battle_info(is_trainer=True), labels, []) for _ in range(4)]
-    assert picks[:3] == [1, 1, 1] and len(agent.prompts) == 1       # after three tries it stops forcing the switch
+    assert picks == [1, 1, 1, 0] and agent.prompts == []            # after three tries it stops forcing the switch
 
     agent.game.party = lambda: [NS(hp=0, moves=[NS(power=15, pp=9)]), NS(hp=0, moves=[NS(power=15, pp=9)])]
     agent.pressed.clear()

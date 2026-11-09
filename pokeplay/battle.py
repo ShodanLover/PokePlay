@@ -26,6 +26,12 @@ EFFECT_PHRASES = [
 ]
 
 
+# Moves that keep hurting the opponent on later turns (their names as the game spells them).
+DAMAGE_OVER_TIME = {"LEECH SEED", "POISONPOWDER", "POISON GAS", "TOXIC", "WILL-O-WISP", "NIGHTMARE", "SANDSTORM", "HAIL",
+                    "WRAP", "BIND", "CLAMP", "FIRE SPIN", "WHIRLPOOL", "SAND TOMB"}
+OVER_TIME_NOTE = "damage over time"
+
+
 @dataclass
 class Choice:
     kind: str            # "move", "bag", "switch" or "run"
@@ -192,8 +198,10 @@ def rate_moves(game: Game, info: BattleInfo) -> dict[int, str]:
     for slot, move in enumerate(me.moves):
         if move.pp <= 0:
             continue
+        over_time = getattr(move, "name", "").upper() in DAMAGE_OVER_TIME
         if not move.power:
-            notes[slot] = ", does no direct damage"
+            notes[slot] = (f", {OVER_TIME_NOTE}: nothing right away, then hurts the opponent every turn" if over_time
+                           else ", status move, does no direct damage")
             continue
         multiplier = game.effectiveness(move.type, foe.types)
         same_type_bonus = 1.5 if move.type in me.types else 1.0
@@ -201,7 +209,9 @@ def rate_moves(game: Game, info: BattleInfo) -> dict[int, str]:
         effect = ("no effect at all on this opponent" if multiplier == 0 else
                   "super effective" if multiplier > 1 else
                   "not very effective" if multiplier < 1 else "normal damage")
-        notes[slot] = f", {effect}"
+        notes[slot] = f", {effect}" if multiplier == 0 else f", direct damage, {effect}"
+        if over_time and multiplier:
+            notes[slot] += f", plus {OVER_TIME_NOTE}"
     if scores and max(scores.values()) > 0:
         best = max(scores, key=scores.get)
         notes[best] += ", THE STRONGEST CHOICE"

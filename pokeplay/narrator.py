@@ -54,23 +54,40 @@ class Narrator:
         self._kokoro = None
         self._subtitle = ""
         self.last_spoke = time.time()
-        self._q: queue.Queue[tuple[float, str]] = queue.Queue()
+        self._q: queue.Queue[tuple[float, str, bool]] = queue.Queue()      # when it was queued, the line, must it be said
+        self._queue_lock = threading.Lock()
         self._max_queue = max_queue
         self._busy = threading.Event()
         self._piper_voice = None
         threading.Thread(target=self._run, daemon=True).start()
 
     def say(self, text: str) -> None:
+        self._enqueue(text, must_say=False)
+
+    def say_first(self, text: str) -> None:
+        """For a person who's waiting on an answer: it goes ahead of her commentary and is never dropped."""
+        self._enqueue(text, must_say=True)
+
+    def _enqueue(self, text: str, must_say: bool) -> None:
         text = " ".join(text.split())
         if not text:
             return
-        # Drop stale lines if the voice is falling behind the game.
-        while self._q.qsize() >= self._max_queue:
-            try:
-                self._q.get_nowait()
-            except queue.Empty:
-                break
-        self._q.put((time.time(), text))
+        new = (time.time(), text, must_say)
+        with self._queue_lock:
+            waiting = []
+            while True:
+                try:
+                    waiting.append(self._q.get_nowait())
+                except queue.Empty:
+                    break
+            replies = [item for item in waiting if item[2]]
+            lines = [item for item in waiting if not item[2]]
+            if must_say:
+                replies.append(new)
+            else:                   # drop stale lines if the voice is falling behind the game
+                lines = lines[-(self._max_queue - 1):] + [new] if self._max_queue > 1 else [new]
+            for item in replies + lines:
+                self._q.put(item)
 
     def is_speaking(self) -> bool:
         return self._busy.is_set() or not self._q.empty()
@@ -83,10 +100,10 @@ class Narrator:
     # ------------------------------------------------------------------ worker
     def _run(self) -> None:
         while True:
-            queued_at, text = self._q.get()
+            queued_at, text, must_say = self._q.get()
             self._busy.set()
             try:
-                if time.time() - queued_at > LINE_MAX_AGE:      # she'd be talking about something long over
+                if not must_say and time.time() - queued_at > LINE_MAX_AGE:      # she'd be talking about something long over
                     print(f"[voice] (skipped, too late) {text}")
                     continue
                 self.last_spoke = time.time()

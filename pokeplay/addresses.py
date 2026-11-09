@@ -35,7 +35,9 @@ gActionSelectionCursor = 0x02023FF8
 gMoveSelectionCursor = 0x02023FFC
 gBattleOutcome = 0x02023E8A
 gPartyMenu = 0x0203B0A0
+gPartyMenu_menuType = gPartyMenu + 0x08     # low 4 bits; see PARTY_MENU_IN_BATTLE
 gPartyMenu_slotId = gPartyMenu + 0x09
+PARTY_MENU_IN_BATTLE = 1
 
 # --- ROM functions (compared against gMain.callback2 etc.) ---
 CB2_Overworld = 0x080565B4

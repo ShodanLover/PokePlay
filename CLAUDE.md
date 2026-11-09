@@ -46,6 +46,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Unattended play:** general rules keep her moving: impossible actions disappear, repeated ones rest, after 6
   decisions without anything new she can only pick what she's tried least (`_prefer_untried`), and a goal with no
   progress for 15 decisions is dropped along with the notes feeding it.
+- **Stuck detector (`watchdog.py`):** the catch-all behind those rules. Only a game state she hasn't been in lately counts as
+  progress, so loops count as stuck. After 60s (150s on the map) code stops asking the AI and tries escalating button escapes
+  every 30s. The first attempt saves the situation to `logs/stuck.jsonl`: read that to fix real causes.
 - **Tone update (owner's request):** very unhinged, swearing allowed, and flirty. The flirting stays non-sexual and aimed
   only at inanimate things, and sexual content stays filtered (`NOT_FOR_STREAM`): the game's human characters are
   children and it runs unattended on a public stream. No slurs, hate or harassment.
@@ -55,6 +58,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Battle math is done in code** (`rate_moves` in `battle.py`): each move is labeled by effectiveness and the strongest
   is marked, and code just uses it (no model call) unless she could catch something. Decision temperature is 0.3 in `config.toml`; her comments have their own wild setting.
 - **Known routes skip the AI:** when `ROUTE` gives a single exit or door, code takes it without asking the model.
+- **Levels before gyms (owner's request):** `TRAINING` in `hints.py` holds the level her strongest should reach for the first
+  5 gyms. If she's short while in that city or on the grass route next to it, she trains there, for at most `TRAIN_LIMIT` (60)
+  decisions per gym so she can't stall. Sabrina onward (`LATE_TARGETS`) is only a warning in her next step.
 - **Clips:** `highlights.py` writes `logs/highlights-DATE.md`, a timestamped shortlist of big moments and her reactions,
   plus LeBron and headline lines, for the owner to clip.
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.

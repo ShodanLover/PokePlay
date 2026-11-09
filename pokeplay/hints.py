@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from pathlib import Path
 
 # The rest of the game, in our own words. For each badge count: (a place she hasn't reached yet, what to do), in order,
@@ -48,7 +49,8 @@ GUIDE_HEADINGS = ("Pallet Town to Pewter City", "Mt. Moon to Vermilion City", "L
                   "Saffron City to Viridian City", "Indigo Plateau")
 GUIDE_FOR_BADGES = (0, 1, 1, 2, 2, 3, 3, 3, 4)      # which part of the owner's route notes applies at each badge count
 GUIDE_MAX_CHARS = 1500                              # keeps her prompt short, which keeps her fast
-BACK_TO_CENTER = "Your lead Pokémon has no attacks left. Go back to the nearest town and heal at the Pokémon Center, which refills them."
+BACK_TO_CENTER = ("Your team is out of attacks. Go straight back to the nearest town and heal at the Pokémon Center, which "
+                  "refills every move for free. Don't go looking for battles until you've done that.")
 TO_NEAREST_CENTER = {"Route 1": "north", "Route 2": "north", "Route 3": "west", "Route 22": "east", "Pallet Town": "north",
                      "Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
                      "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"}
@@ -78,6 +80,26 @@ TO_ROUTE_3 = "Heal at the Pewter City Pokémon Center, then leave by the east si
 THROUGH_MT_MOON = "Go all the way through Mt. Moon and out the far side onto Route 4, then east to Cerulean City."
 MISTY = "In Cerulean City, heal at the Pokémon Center, then go into the Gym and beat the leader, Misty."
 
+# Gyms with tall grass right next door. Badges she has -> (leader, city, level her strongest should reach first,
+# way out of the city to the grass, the route with the grass, way back). The leaders' best are 14, 21, 24, 29 and 43.
+TRAINING = {
+    0: ("Brock", "Pewter City", 12, "east", "Route 3", "west"),
+    1: ("Misty", "Cerulean City", 18, "west", "Route 4", "east"),
+    2: ("Lt. Surge", "Vermilion City", 21, "north", "Route 6", "south"),
+    3: ("Erika", "Celadon City", 26, "east", "Route 7", "west"),
+    4: ("Koga", "Fuchsia City", 33, "east", "Route 15", "west"),
+}
+# Later on there's no grass close by, or what lives in it is too weak to help, so she's only warned.
+# Badges she has -> (who's next, level to reach). Their best are 43, 47, 50, and the League goes up to 65.
+LATE_TARGETS = {5: ("Sabrina", 36), 6: ("Blaine", 40), 7: ("Giovanni", 42), 8: ("the Elite Four", 48)}
+TRAIN_LIMIT = 60                                    # map decisions per badge spent training, so she can never stall here
+TRAIN_STEPS = {badges: (f"Your team isn't strong enough to beat {leader} yet. Go to {route}, on the {way} side of {city}, "
+                        f"walk around in the tall grass, and battle what you meet until your strongest team member "
+                        f"reaches level {level}.")
+               for badges, (leader, city, level, way, route, _) in TRAINING.items()}
+RETURN_STEPS = {badges: f"Your team is badly hurt. Leave {route} by the {back} side, go back to {city}, and heal at the Pokémon Center."
+                for badges, (_, city, _, _, route, back) in TRAINING.items()}
+
 
 # For each step: where she is -> the exit direction or door name that moves her forward.
 ROUTE = {
@@ -89,10 +111,16 @@ ROUTE = {
                 "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"},
     THROUGH_FOREST: {"Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
                      "Route 2": "north"},
-    BROCK: {"Route 2": "north", "Pewter City": "Pewter City - Gym"},
+    BROCK: {"Route 2": "north", "Route 3": "west", "Pewter City": "Pewter City - Gym"},
     TO_ROUTE_3: {"Pewter City": "east", "Route 3": "east", "Route 4": "Mt Moon"},
     MISTY: {"Route 4": "east", "Cerulean City": "Cerulean City - Gym"},
 }
+for _badges, (_leader, _city, _level, _way, _route, _back) in TRAINING.items():
+    ROUTE[TRAIN_STEPS[_badges]] = {_city: _way}
+    ROUTE[RETURN_STEPS[_badges]] = {_route: _back}
+# Done training at a gym with no ROUTE entry: the way back to town. Kept apart because a ROUTE entry would also walk her
+# out of every building on the way, like the ship or the Gym itself.
+AFTER_TRAINING = {BY_BADGES[badges]: {TRAINING[badges][4]: TRAINING[badges][5]} for badges in (2, 3, 4)}
 
 
 # The buildings where a step's job gets done, by the game's full map names.
@@ -102,6 +130,8 @@ DESTINATIONS = {GET_PARCEL: "Viridian City - Mart", PARCEL: "Pallet Town - Profe
 
 def target_for(step: str, place: str) -> str:
     """The exit direction or door name she should take now, or "" to leave it up to her."""
+    if place in AFTER_TRAINING.get(step, {}):
+        return AFTER_TRAINING[step][place]
     if step == BACK_TO_CENTER:
         return TO_NEAREST_CENTER.get(place, "")
     if step == HEAL:
@@ -158,10 +188,56 @@ def guide_section(badges: int, path: Path = GUIDE_PATH) -> str:
     return (body if end == -1 else body[:end]).strip()[:GUIDE_MAX_CHARS]
 
 
+def way_to_center(place: str, links: dict[str, str], places: dict[str, str]) -> str:
+    """The remembered door or exit that starts the shortest walk she knows to a town with a Pokémon Center, or ""."""
+    routes: dict[str, list[tuple[str, str]]] = {}
+    for key, destination in links.items():
+        origin = places.get(key.split("|")[0], "")
+        if origin and destination and not destination.startswith("("):      # "(blocked)" and the like aren't places
+            routes.setdefault(origin, []).append((key, destination))
+    walks = deque(routes.get(place, []))
+    seen = {place}
+    while walks:
+        first_step, at = walks.popleft()
+        if at.split(" - ")[0] in CENTER_CITIES:
+            return first_step
+        if at not in seen:
+            seen.add(at)
+            walks.extend((first_step, onward) for _, onward in routes.get(at, []))
+    return ""
+
+
+def is_training(step: str) -> bool:
+    """This step means going to the tall grass to level up."""
+    return step in TRAIN_STEPS.values()
+
+
+def _ready_for_gym(step: str, badges: int, place: str, strongest: int, can_train: bool, needs_healing: bool) -> str:
+    """The gym step, unless her team is too weak for it and she's right by the grass. Never interrupts her travels."""
+    if not strongest:                               # her team's level isn't known
+        return step
+    if badges in LATE_TARGETS:
+        who, level = LATE_TARGETS[badges]
+        if strongest >= level:
+            return step
+        return f"{step} Your team looks weak for {who}: try to get your strongest team member to level {level} first."
+    if badges not in TRAINING or not can_train or strongest >= TRAINING[badges][2]:
+        return step
+    _, city, _, _, route, _ = TRAINING[badges]
+    area = place.split(" - ")[0]
+    if area == route:
+        return RETURN_STEPS[badges] if needs_healing else TRAIN_STEPS[badges]
+    return TRAIN_STEPS[badges] if area == city else step
+
+
 def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str], delivered: bool,
-             want_balls: bool = False, place: str = "", needs_healing: bool = False, heal_anywhere: bool = False) -> str:
+             want_balls: bool = False, place: str = "", needs_healing: bool = False, heal_anywhere: bool = False,
+             strongest: int = 0, can_train: bool = False) -> str:
     def been(name: str) -> bool:
         return any(name in visited for visited in places)
+
+    def gym(step: str, badge_count: int) -> str:
+        return _ready_for_gym(step, badge_count, place, strongest, can_train, needs_healing)
 
     if not has_team:
         return NO_TEAM
@@ -178,13 +254,13 @@ def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str
         for marker, step in LATER_STEPS.get(badges, []):
             if not been(marker):
                 return step
-        return BY_BADGES[badges]
+        return gym(BY_BADGES[badges], badges)
     if badges == 1:
         if been("Cerulean City"):
-            return MISTY
+            return gym(MISTY, 1)
         return THROUGH_MT_MOON if been("Mt Moon") else TO_ROUTE_3
     if been("Pewter City"):
-        return BROCK
+        return gym(BROCK, 0)
     if "Viridian Forest" in places:             # the forest itself, not the gate buildings named after it
         return THROUGH_FOREST
     if delivered:
