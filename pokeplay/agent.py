@@ -35,6 +35,8 @@ KIND_ORDER = {"warp": 0, "exit": 1, "talk": 2, "train": 3, "explore": 4}
 BATTLE_OUTCOMES = {1: "won", 2: "lost", 3: "drew", 4: "ran away", 5: "teleported away",
                    6: "the wild Pokémon fled", 7: "caught it"}
 MAX_TALK_OPTIONS = 5
+ON_SCREEN_MAX_AGE = 20      # seconds that the game's latest text still counts as what's happening
+LOW_ATTACK_PP = 3          # this many attacks left in total on her lead Pokémon: time to go and heal
 NO_CATCHING = "A trainer's creature can never be caught: POKé BALLs only work on wild creatures, so don't use one here."
 BALL_ITEM = re.compile(r"\bBALL\b", re.I)
 REFLECT_EVERY = 12          # decisions between reflections
@@ -49,7 +51,7 @@ EVENT_MAX_AGE = 6        # seconds after which something that happened is too ol
 STALE_AFTER = 6            # map decisions with no new place, door or person before she must try what she's tried least
 REPEAT_LIMIT = 3           # the same action this many times in her last 6 means it isn't working
 REST_DECISIONS = 10         # map decisions before she's offered that action again
-SPEAK_DECISION_CHANCE = 0.3 # the rest of her talking comes from comments, which vary far more
+SPEAK_DECISION_CHANCE = 0.1 # the rest of her talking comes from comments, which vary far more
 LONG_SILENCE = 15        # seconds without a spoken line before the repeat check relaxes
 MENU_LOOP_LIMIT = 3        # picking the same thing this many times without leaving means she's going in circles
 MENU_COOLDOWN = 8           # map decisions before the main menu is offered again after that
@@ -132,6 +134,7 @@ class Agent:
         self._events: queue.Queue[str] = queue.Queue()
         self._context = ""
         self._last_message = ""
+        self._on_screen: tuple[str, float] = ("", 0.0)      # the latest text the game showed, and when
         self._dialog_presses = 0
         self._dialog_lines: list[str] = []
         self._talking_to: str | None = None
@@ -261,6 +264,8 @@ class Agent:
             self._menu_turn(menu)
         elif mode == "battle":
             self.pilot.step()
+            if self.pilot._last_msg != self._on_screen[0]:
+                self._on_screen = (self.pilot._last_msg, time.time())
             self._absorb_battle_lessons()
         elif mode == "party_menu":
             if self._leaving_menus and not self._in_battle:
@@ -470,29 +475,56 @@ class Agent:
             except queue.Empty:
                 quiet_for = time.time() - self.narrator.last_spoke
                 if silence and quiet_for >= silence and not self.narrator.is_speaking():
-                    for _ in range(3):              # a line can be dropped as a repeat: try again
-                        line = self.brain.comment(
-                            [f"It's been quiet for a bit. Right now you're: {self._activity}. Think out loud about "
-                             "whatever is on your mind: what you're doing, your team, your plan, something you "
-                             "noticed, or how it's going. Say something you haven't said yet."],
-                            self._context or "You've only just started playing.")
-                        if line and self._speak(line):
-                            break
+                    self._comment_on([f"Right now you're: {self._activity}. Say something about exactly that."], 3)
                     self.narrator.last_spoke = time.time()   # don't retry instantly if it failed
                 continue
             time.sleep(1.0)    # group things that happen close together
             while not self._events.empty():
                 batch.append(self._events.get_nowait())
-            wait = self.cfg.commentary.min_seconds_between - (time.time() - last)
-            if wait > 0:
-                time.sleep(wait)
+            if time.time() - max(last, self.narrator.last_spoke) < self.cfg.commentary.min_seconds_between:
+                continue                        # she spoke recently, so let this one pass (and stay free for viewers)
             fresh = [text for when, text in batch if time.time() - when <= EVENT_MAX_AGE]
             if not fresh:                       # reacting now would be talking about something long over
                 continue
-            line = self.brain.comment(fresh[-3:], self._context)
-            if line:
-                self._speak(line)
+            if self._comment_on(fresh[-3:], 2):
                 last = time.time()
+
+    def _comment_on(self, what_happened: list[str], tries: int) -> bool:
+        """Ask for a line about what's happening, and say it only if it really is about that. True if she said one."""
+        events, facts = list(what_happened), self._game_facts()
+        on_screen = self._on_screen_now()
+        if on_screen and not any(on_screen[:40] in event for event in events):
+            events.append(f'Text on screen: "{on_screen}"')
+        for _ in range(tries):
+            line = self.brain.comment(events, self._context or "You've only just started playing.")
+            if not line:
+                continue
+            if not self._about_the_game(line, facts + events):
+                print(f"[voice] (skipped, not about the game) {line}")
+                continue
+            if self._speak(line):
+                return True
+        return False
+
+    def _on_screen_now(self) -> str:
+        text, when = self._on_screen
+        return text if time.time() - when <= ON_SCREEN_MAX_AGE else ""
+
+    def _game_facts(self) -> list[str]:
+        """The names and words she could fairly be talking about right now."""
+        facts = [re.sub(r"\(.*?\)", "", self._activity), self.memory.places.get(self._last_map, "")]
+        return facts + list((self._snapshot or {}).get("team", {}))
+
+    def _about_the_game(self, line: str, facts: list[str]) -> bool:
+        """A small model will wander off however it's asked, so a line has to share a real word with what's going on."""
+        if self.brain.is_planned_aside(line):
+            return True
+
+        def words(text: str) -> set[str]:
+            return {w.removesuffix("'s") for w in _words(text) if len(w) >= 4 and w not in COMMON_WORDS}
+
+        known = words(" ".join(facts))
+        return not known or bool(known & words(line))
 
     def _speak(self, text: str, always_fresh: bool = False) -> bool:
         """Say a line out loud, unless it's basically a repeat of something she just said. True if it was said."""
@@ -795,6 +827,7 @@ class Agent:
         if msg and msg != self._last_message:
             self._last_message = msg
             short = msg if len(msg) <= 200 else msg[:197] + "..."
+            self._on_screen = (short, time.time())
             self._dialog_lines.append(short)
             self.history.append(f'On screen: "{short}"')
             self.overlay.log(f'💬 {short}')
@@ -946,10 +979,10 @@ class Agent:
 
     @staticmethod
     def _lead_out_of_attacks(s: GameState) -> bool:
-        """The Pokémon she'd send in first can't deal any damage: only a Center (or item) fixes that."""
+        """The Pokémon she'd send in first can't deal damage, or nearly can't: a trainer battle with none left can't be left."""
         lead = next((m for m in s.party if m.hp > 0), None)
         moves = getattr(lead, "moves", None)
-        return bool(moves) and not any(mv.power and mv.pp > 0 for mv in moves)
+        return bool(moves) and sum(mv.pp for mv in moves if mv.power) <= LOW_ATTACK_PP
 
     @staticmethod
     def _team_badly_hurt(s: GameState) -> bool:

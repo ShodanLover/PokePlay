@@ -49,6 +49,11 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
 - **Stuck detector (`watchdog.py`):** the catch-all behind those rules. Only a game state she hasn't been in lately counts as
   progress, so loops count as stuck. After 60s (150s on the map) code stops asking the AI and tries escalating button escapes
   every 30s. The first attempt saves the situation to `logs/stuck.jsonl`: read that to fix real causes.
+- **Comments stay on the game (owner's request):** she's given the latest on-screen text, and a line sharing no real word with
+  what's happening isn't spoken (`_about_the_game`); headlines and the running joke are exempt.
+- **Talks less (owner's request):** at most one comment every 30s, and she thinks out loud after 60s of quiet
+  (`[commentary]` in `config.toml`). Viewer replies skip that wait, open with "Hey {username}," (added in code) and are unhinged,
+  still with no flirting with viewers, sexual content, threats or insults about who they are.
 - **Tone update (owner's request):** very unhinged, swearing allowed, and flirty. The flirting stays non-sexual and aimed
   only at inanimate things, and sexual content stays filtered (`NOT_FOR_STREAM`): the game's human characters are
   children and it runs unattended on a public stream. No slurs, hate or harassment.

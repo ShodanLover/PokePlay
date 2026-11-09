@@ -49,7 +49,7 @@ GUIDE_HEADINGS = ("Pallet Town to Pewter City", "Mt. Moon to Vermilion City", "L
                   "Saffron City to Viridian City", "Indigo Plateau")
 GUIDE_FOR_BADGES = (0, 1, 1, 2, 2, 3, 3, 3, 4)      # which part of the owner's route notes applies at each badge count
 GUIDE_MAX_CHARS = 1500                              # keeps her prompt short, which keeps her fast
-BACK_TO_CENTER = ("Your team is out of attacks. Go straight back to the nearest town and heal at the Pokémon Center, which "
+BACK_TO_CENTER = ("Your team is out of attacks, or nearly. Go straight back to the nearest town and heal at the Pokémon Center, which "
                   "refills every move for free. Don't go looking for battles until you've done that.")
 TO_NEAREST_CENTER = {"Route 1": "north", "Route 2": "north", "Route 3": "west", "Route 22": "east", "Pallet Town": "north",
                      "Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
