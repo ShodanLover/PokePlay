@@ -146,6 +146,7 @@ COMEDY_ANGLES = [
 ]
 
 COMMENT_TEMPERATURE = 1.35  # wilder than her decisions, which stay at the normal setting
+SUBJECT_CHANCE = 0.15       # how often a comment drags in a random object instead of just reacting to the game
 
 # A different thing to riff on each line. Without this, a small model finds one joke and never lets go.
 RANDOM_SUBJECTS = [
@@ -160,7 +161,8 @@ RANDOM_SUBJECTS = [
 # She runs unattended on a public stream in a game full of child characters, at a high randomness setting.
 NOT_FOR_STREAM = re.compile(
     r"\b(?:sex\w*|naked|nude|horny|aroused|erotic|pregnan\w*|baby with|in bed|bedroom|seduc\w*|moan\w*|undress\w*"
-    r"|strip\w*|thigh\w*|boob\w*|breast\w*|lingerie|making love|make love)\b", re.I)
+    r"|strip\w*|thigh\w*|boob\w*|breast\w*|lingerie|making love|make love"
+    r"|walkthrough|hints?|next step|told to|supposed to do)\b", re.I)     # the guide stays a secret from viewers
 
 OBSESSION_CHANCE = 0.1    # how often a spoken comment includes her running bit (1 in 10)
 OBSESSION_GAP = 8           # lines that must pass before she brings it up again
@@ -446,6 +448,15 @@ class Brain:
             return ""
         return f"Work in a quick mention of {self.obsession}'s basketball career, keeping it light. "
 
+    def _style_line(self) -> str:
+        """A fresh style every line. Only now and then a random subject: mostly she reacts to the game itself."""
+        angle = self._next_angle()
+        if random.random() < SUBJECT_CHANCE:
+            return (f"Deliver this line in this style: {angle}. Your random subject for this line: "
+                    f"{self._next_subject()}. Connect it to what actually happened. ")
+        angle = angle.replace("your random subject", "the thing that just happened")
+        return f"Deliver this line in this style: {angle}. It must be a reaction to what actually just happened in the game. "
+
     def _next_subject(self) -> str:
         if not self._subjects:
             self._subjects = random.sample(RANDOM_SUBJECTS, len(RANDOM_SUBJECTS))
@@ -474,9 +485,8 @@ class Brain:
             f"{context}\n\nWHAT JUST HAPPENED:\n" + "\n".join(f"- {e}" for e in events) +
             "\n\nReact out loud to yourself in one short spoken sentence (under 15 words). Be absolutely, gloriously unhinged and funny: the weirdest thing anyone could say here. "
             "Curse if it makes it funnier. "
-            f"Deliver this line in this style: {self._next_angle()}. Your random subject for this line: "
-            f"{self._next_subject()}. Connect it to what actually happened. "
-            "No emojis, no hashtags, no quotation marks. "
+            + self._style_line()
+            + "No emojis, no hashtags, no quotation marks. "
             + (self._headline_line() or self._obsession_line())
             + 'Reply with JSON: {"say": "exactly the words you say out loud, nothing else"}'
         )

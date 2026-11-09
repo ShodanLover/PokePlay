@@ -47,7 +47,9 @@ game, start to finish, **as a true first-timer**, no matter how long it takes (m
   only at inanimate things, and sexual content stays filtered (`NOT_FOR_STREAM`): the game's human characters are
   children and it runs unattended on a public stream. No slurs, hate or harassment.
 - **Variety:** don't name specific objects in her prompts or show her recent lines: a small model parrots both ("winking
-  doors"). Each comment gets a random style and subject (`COMEDY_ANGLES`, `RANDOM_SUBJECTS`) and overused words are blocked.
+  doors"). Each comment gets a random style (`COMEDY_ANGLES`), only 15% get a random subject so she mostly reacts to the
+  game, and overused words are blocked. Her guide is secret: lines mentioning hints or a walkthrough aren't spoken.
+- **Known routes skip the AI:** when `ROUTE` gives a single exit or door, code takes it without asking the model.
 - **Pacing:** she thinks at most `max_seconds_between_thoughts` (7) after an action, and doesn't always speak.
 - **Voice:** Kokoro **`af_heart`** (installed via `python -m pokeplay --get-voice kokoro:af_heart`).
   Voice volume ~80-85; the game volume is turned down in the Windows volume mixer.

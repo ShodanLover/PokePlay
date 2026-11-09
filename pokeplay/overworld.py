@@ -145,6 +145,9 @@ class Overworld:
             best = min(reach, key=lambda t: dist[t])
             key = f"{s.map_group}.{s.map_num}|{n.local_id}"
             said = self.memory.people.get(key) if self.memory else None
+            if said and n.graphics_id == A.OBJ_EVENT_GFX_CUT_TREE \
+                    and not any(mv.name.upper() == "CUT" for mon in s.party for mv in mon.moves):
+                continue                    # she's read this tree, and can't do anything about it yet
             extra = f' (you checked it before: "{said[:90]}")' if said else ""
             what = {A.OBJ_EVENT_GFX_CUT_TREE: "the small, thin tree",
                     A.OBJ_EVENT_GFX_PUSHABLE_BOULDER: "the big round boulder",

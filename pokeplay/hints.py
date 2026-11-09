@@ -35,7 +35,7 @@ ROUTE = {
     TO_VIRIDIAN: {"Pallet Town": "north", "Route 1": "north"},
     GET_PARCEL: {"Viridian City": "Viridian City - Mart"},
     PARCEL: {"Viridian City": "south", "Route 1": "south", "Pallet Town": "Pallet Town - Professor Oak's Lab"},
-    TO_FOREST: {"Pallet Town": "north", "Route 1": "north", "Viridian City": "north",
+    TO_FOREST: {"Pallet Town": "north", "Route 1": "north", "Viridian City": "north", "Route 22": "east",
                 "Route 2": "Viridian Forest - South Entrance",
                 "Route 2 - Viridian Forest - South Entrance": "Viridian Forest"},
     THROUGH_FOREST: {"Viridian Forest": "North Entrance", "Route 2 - Viridian Forest - North Entrance": "Route 2",
@@ -82,7 +82,7 @@ def hint_for(badges: int, has_team: bool, key_items: list[str], places: list[str
         return THROUGH_MT_MOON if been("Mt Moon") else TO_ROUTE_3
     if been("Pewter City"):
         return BROCK
-    if been("Viridian Forest"):
+    if "Viridian Forest" in places:             # the forest itself, not the gate buildings named after it
         return THROUGH_FOREST
     if delivered:
         return TO_FOREST

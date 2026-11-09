@@ -663,6 +663,46 @@ def test_unsuitable_lines_are_not_spoken(tmp_path):
     assert len(said) == 1
 
 
+def test_gate_building_does_not_count_as_the_forest():
+    from pokeplay import hints as h
+
+    gate = ["Viridian City", "Route 2", "Route 2 - Viridian Forest - South Entrance"]
+    assert h.hint_for(0, True, [], gate, True) == h.TO_FOREST
+    assert h.target_for(h.TO_FOREST, gate[2]) == "Viridian Forest"
+    assert h.target_for(h.TO_FOREST, "Route 22") == "east"
+
+
+def test_comments_are_mostly_about_the_game(monkeypatch):
+    from pokeplay import brain as br
+
+    b = br.Brain("http://x", "m")
+    monkeypatch.setattr(br.random, "random", lambda: 0.9)
+    assert "random subject" not in b._style_line() and "actually just happened" in b._style_line()
+    monkeypatch.setattr(br.random, "random", lambda: 0.0)
+    assert "Your random subject" in b._style_line()
+
+
+def test_read_trees_are_not_offered_without_cut():
+    from types import SimpleNamespace as NS
+    from pokeplay import addresses as A
+
+    world, state = _house_world()
+    tree = NS(local_id=7, x=3, y=0, graphics_id=A.OBJ_EVENT_GFX_CUT_TREE)
+    world.game.npcs = lambda: [tree]
+    world.memory = NS(links={}, people={"4.0|7": "This tree looks like it can be CUT down!"})
+    assert not any(o.kind == "talk" for o in world.build_options(state)[0])
+    state.party = [NS(moves=[NS(name="CUT")])]
+    assert any(o.kind == "talk" for o in world.build_options(state)[0])
+
+
+def test_her_guide_stays_secret(tmp_path):
+    agent, _ = _named_agent(tmp_path)
+    agent.narrator.say = lambda text: None
+    assert agent._speak("My walkthrough says to go north.") is False
+    assert agent._speak("That hint was useless.") is False
+    assert not agent._worth_noting("The rubber duck told me things.")
+
+
 def test_impossible_actions_stop_being_offered(tmp_path):
     from types import SimpleNamespace as Opt
 

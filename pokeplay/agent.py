@@ -12,7 +12,7 @@ import time
 
 from . import addresses as A
 from .battle import BattlePilot, Choice, hp_bar
-from .brain import COMMON_WORDS, GUESSWORK, NOT_FOR_STREAM, OVERUSED_WORDS, Brain, BrainOffline, _words, clean_spoken
+from .brain import COMMON_WORDS, GUESSWORK, NOT_FOR_STREAM, OVERUSED_WORDS, RANDOM_SUBJECTS, Brain, BrainOffline, _words, clean_spoken
 from .config import Config
 from .emulator import Emulator
 from .game import BattleInfo, Game, GameState, Mon
@@ -412,7 +412,18 @@ class Agent:
             ("Things you've noticed in past battles:\n" + "\n".join(f"- {l}" for l in lessons)) if lessons
             else "You haven't learned anything about how battles work yet.",
         ]
+        parts.append(self._catch_nudge(info))
         return "\n".join(p for p in parts if p)      # only the battle: her notes and goal just distract her here
+
+    def _catch_nudge(self, info: BattleInfo) -> str:
+        """Wild battle, Poké Balls in the bag, room on the team: a new teammate is worth trying for."""
+        try:
+            s = self.game.state()
+        except Exception:  # noqa: BLE001 - never let this get in the way of a battle
+            return ""
+        if info.is_trainer or not s.balls or len(s.party) >= 6:
+            return ""
+        return "You have Poké Balls and room on your team, so try catching this one: open your Bag and throw a ball."
 
     def _choose_battle_action(self, info: BattleInfo, labels: list[str], choices: list[Choice]) -> int:
         context = self._battle_context(info)
@@ -599,7 +610,7 @@ class Agent:
         if self._team_badly_hurt(s):
             parts.append("YOUR TEAM IS BADLY HURT: go to the nearest Pokémon Center and talk to the person at the "
                          "counter, or go home and talk to Mom, before doing anything else.")
-        parts.append("YOUR NEXT STEP (do this): " + self._next_step(s))
+        parts.append("YOUR NEXT STEP (do this, as if it's your own idea, and never mention being told): " + self._next_step(s))
         if self._actions_since_discovery >= 8:
             parts.append(f"You've done {self._actions_since_discovery} things in a row without discovering "
                          "anything new.")
@@ -756,6 +767,8 @@ class Agent:
         """Her journal is for new facts: guesses and near-copies of recent notes make her talk in circles."""
         if GUESSWORK.search(note) or any(_same_idea(note, old) for old in self._abandoned_goals):
             return False
+        if any(subject.split()[-1] in note.lower() for subject in RANDOM_SUBJECTS):     # jokes aren't facts
+            return False
         return not any(difflib.SequenceMatcher(None, note.lower(), old.lower()).ratio() > 0.6
                        for old in self.memory.journal[-15:])
 
@@ -822,9 +835,15 @@ class Agent:
         self._context = self._context_text(s)
         self._wait_for_voice()
         self.overlay.update(thought="Thinking...")
-        decision = self.brain.decide(self._context, lines)
-        opt = options[decision.choice]
-        self._apply_decision(decision, opt.label)
+        if route and len(route) == 1:           # a known route: no need to stop and think, just walk it
+            opt = route[0]
+            self._think_seconds = 0.0
+            self._activity = opt.label[:120]
+            print(f"[route] {opt.label}")
+        else:
+            decision = self.brain.decide(self._context, lines)
+            opt = options[decision.choice]
+            self._apply_decision(decision, opt.label)
         self.pick_counts[opt.key] += 1
         if not route:                       # following the route isn't "retrying the same thing"
             self._note_pick(opt.key)
